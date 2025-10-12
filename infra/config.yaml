@@ -1,0 +1,7 @@
+model_list:
+  - model_name: gpt-4o-mini
+    litellm_params:
+      model: azure/<your_azure_deployment_name>
+      api_base: os.environ/AZURE_API_BASE
+      api_key: os.environ/AZURE_API_KEY
+      api_version: os.environ/AZURE_API_VERSION
