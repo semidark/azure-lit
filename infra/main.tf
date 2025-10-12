@@ -8,6 +8,8 @@ terraform {
 }
 
 provider "azurerm" {
+  subscription_id = "b6548f5c-d425-4e5c-bfb2-296186a152ee"
+
   features {}
 }
 
@@ -36,17 +38,40 @@ resource "azurerm_resource_group" "rg" {
   location = var.location
 }
 
+resource "azurerm_storage_account" "sa" {
+  name                     = "azurelitsapoc"
+  resource_group_name      = azurerm_resource_group.rg.name
+  location                 = azurerm_resource_group.rg.location
+  account_tier             = "Standard"
+  account_replication_type = "LRS"
+}
+
+resource "azurerm_key_vault" "kv" {
+  name                = "AzureLIT-POC-KV"
+  location            = azurerm_resource_group.rg.location
+  resource_group_name = azurerm_resource_group.rg.name
+  tenant_id           = data.azurerm_client_config.current.tenant_id
+  sku_name            = "standard"
+}
+
+data "azurerm_client_config" "current" {}
+
 resource "azurerm_ai_foundry" "hub" {
   name                = var.ai_foundry_hub_name
   resource_group_name = azurerm_resource_group.rg.name
   location            = azurerm_resource_group.rg.location
+  storage_account_id  = azurerm_storage_account.sa.id
+  key_vault_id        = azurerm_key_vault.kv.id
+
+  identity {
+    type = "SystemAssigned"
+  }
 }
 
 resource "azurerm_ai_foundry_project" "project" {
-  name                = var.ai_foundry_project_name
-  ai_foundry_id       = azurerm_ai_foundry.hub.id
-  resource_group_name = azurerm_resource_group.rg.name
-  location            = azurerm_resource_group.rg.location
+  name               = var.ai_foundry_project_name
+  ai_services_hub_id = azurerm_ai_foundry.hub.id
+  location           = azurerm_resource_group.rg.location
 }
 
 resource "azurerm_log_analytics_workspace" "la" {
@@ -88,20 +113,24 @@ resource "azurerm_container_app" "ca" {
       }
 
       volume_mounts {
-        name       = "config-volume"
-        mount_path = "/app/config.yaml"
-        sub_path   = "config.yaml"
+        name = "config-volume"
+        path = "/app/config.yaml"
       }
     }
 
     volume {
-      name     = "config-volume"
-      secret_name = "config-yaml"
+      name         = "config-volume"
+      storage_type = "Secret"
+      storage_name = "config-yaml"
     }
   }
 
   ingress {
     external_enabled = true
     target_port      = 4000
+    traffic_weight {
+      percentage = 100
+      latest_revision = true
+    }
   }
 }
