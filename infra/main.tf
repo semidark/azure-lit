@@ -15,7 +15,7 @@ provider "azurerm" {
 
 variable "location" {
   description = "The Azure region to deploy the resources in."
-  default     = "Sweden Central"
+  default     = "Germany West Central"
 }
 
 variable "resource_group_name" {
@@ -38,8 +38,14 @@ resource "azurerm_resource_group" "rg" {
   location = var.location
 }
 
+resource "random_string" "suffix" {
+  length  = 6
+  upper   = false
+  special = false
+}
+
 resource "azurerm_storage_account" "sa" {
-  name                     = "azurelitsapoc"
+  name                     = "azurelitsapoc${random_string.suffix.result}"
   resource_group_name      = azurerm_resource_group.rg.name
   location                 = azurerm_resource_group.rg.location
   account_tier             = "Standard"
@@ -104,6 +110,12 @@ resource "azurerm_container_app" "ca" {
     value = file("${path.module}/config.yaml")
   }
 
+  # Inject Azure OpenAI key as a Container Apps secret
+  secret {
+    name  = "azure-openai-key"
+    value = azurerm_cognitive_account.openai.primary_access_key
+  }
+
   template {
     # Shared volume for config file
     volume {
@@ -135,15 +147,31 @@ resource "azurerm_container_app" "ca" {
     # Main container mounts the same volume at /app and uses config.yaml
     container {
       name   = "litellm"
-      image  = "ghcr.io/berriai/litellm:main-latest"
+      image  = "ghcr.io/berriai/litellm:v1.75.8-stable"
       cpu    = 0.25
       memory = "0.5Gi"
 
-      args = ["--config", "/app/config.yaml"]
+      command = ["litellm"]
+      args = ["--config", "/app/config.yaml", "--port", "4000", "--host", "0.0.0.0", "--detailed_debug"]
 
+      # Master key
       env {
         name  = "LITELLM_MASTER_KEY"
         value = "your-master-key" # Replace with a secure key
+      }
+
+      # Azure OpenAI envs
+      env {
+        name  = "AZURE_OPENAI_API_BASE"
+        value = azurerm_cognitive_account.openai.endpoint
+      }
+      env {
+        name  = "AZURE_OPENAI_API_VERSION"
+        value = "2024-10-21"
+      }
+      env {
+        name        = "AZURE_OPENAI_API_KEY"
+        secret_name = "azure-openai-key"
       }
 
       volume_mounts {

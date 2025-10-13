@@ -1,7 +1,23 @@
+# LiteLLM Proxy config - DB-less setup using model_list
+# Azure OpenAI (azure provider) - gpt-4.1
+
 model_list:
-  - model_name: gpt-4o-mini
+  - model_name: gpt-4.1
     litellm_params:
-      model: azure/<your_azure_deployment_name>
-      api_base: os.environ/AZURE_API_BASE
-      api_key: os.environ/AZURE_API_KEY
-      api_version: os.environ/AZURE_API_VERSION
+      model: azure/gpt-4.1
+      azure_deployment: gpt-4.1
+      api_base: os.environ/AZURE_OPENAI_API_BASE
+      api_key: os.environ/AZURE_OPENAI_API_KEY
+      api_version: os.environ/AZURE_OPENAI_API_VERSION
+    model_fallbacks:
+      - model_name: azure/gpt-4.1
+
+# Disable DB features and rely on static model_list
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  store_model_in_db: false
+  disable_spend_logs: true
+  disable_spend_updates: true
+  disable_adding_master_key_hash_to_db: true
+  disable_reset_budget: true
+  allow_requests_on_db_unavailable: true
