@@ -72,6 +72,10 @@ resource "azurerm_ai_foundry_project" "project" {
   name               = var.ai_foundry_project_name
   ai_services_hub_id = azurerm_ai_foundry.hub.id
   location           = azurerm_resource_group.rg.location
+
+  identity {
+    type = "SystemAssigned"
+  }
 }
 
 resource "azurerm_log_analytics_workspace" "la" {
@@ -101,11 +105,41 @@ resource "azurerm_container_app" "ca" {
   }
 
   template {
+    # Shared volume for config file
+    volume {
+      name         = "config-volume"
+      storage_type = "EmptyDir"
+    }
+
+    # Init container writes config.yaml content from secret to the shared volume
+    init_container {
+      name   = "init-config"
+      image  = "busybox:latest"
+      cpu    = 0.25
+      memory = "0.5Gi"
+
+      command = ["/bin/sh", "-c"]
+      args    = ["printf \"%s\" \"$CONF_YAML\" > /mnt/config/config.yaml"]
+
+      env {
+        name        = "CONF_YAML"
+        secret_name = "config-yaml"
+      }
+
+      volume_mounts {
+        name = "config-volume"
+        path = "/mnt/config"
+      }
+    }
+
+    # Main container mounts the same volume at /app and uses config.yaml
     container {
       name   = "litellm"
       image  = "ghcr.io/berriai/litellm:main-latest"
       cpu    = 0.25
       memory = "0.5Gi"
+
+      args = ["--config", "/app/config.yaml"]
 
       env {
         name  = "LITELLM_MASTER_KEY"
@@ -114,14 +148,8 @@ resource "azurerm_container_app" "ca" {
 
       volume_mounts {
         name = "config-volume"
-        path = "/app/config.yaml"
+        path = "/app"
       }
-    }
-
-    volume {
-      name         = "config-volume"
-      storage_type = "Secret"
-      storage_name = "config-yaml"
     }
   }
 
@@ -129,7 +157,7 @@ resource "azurerm_container_app" "ca" {
     external_enabled = true
     target_port      = 4000
     traffic_weight {
-      percentage = 100
+      percentage     = 100
       latest_revision = true
     }
   }

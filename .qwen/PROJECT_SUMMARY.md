@@ -1,28 +1,29 @@
 # Project Summary
 
 ## Overall Goal
-To deploy a Proof of Concept (POC) for an OpenAI-compatible gateway on Azure, using LiteLLM running in a Container App and Terraform for infrastructure as code, within the user's private Azure tenant.
+The user's objective is to deploy a Proof-of-Concept (PoC) for a LiteLLM-based, OpenAI-compatible gateway on Azure using Terraform.
 
 ## Key Knowledge
-- **Technology Stack:** The project uses Terraform to provision Azure resources, including a Container App to run the official LiteLLM Proxy Docker image.
-- **Architecture:** The Terraform configuration is located in `infra/main.tf`. It defines a Resource Group, Storage Account, Key Vault, AI Foundry resources, and a Container App. The `azurerm` provider block is minimal, relying on ambient credentials from the environment (e.g., Azure CLI).
-- **Constraints:** The previous blocker was an Azure Active Directory (AAD) policy on an employer's tenant. The current blocker is an authentication issue in the new private tenant; Terraform cannot automatically determine the Azure subscription ID.
+- **Technology Stack**: The project uses Terraform with the `azurerm` provider to manage Azure infrastructure.
+- **Azure Subscription**: The Terraform provider is explicitly configured with the subscription ID `b6548f5c-d425-4e5c-bfb2-296186a152ee` to ensure correct authentication.
+- **Resource Dependencies**: The `azurerm_ai_foundry_hub` resource requires an `azurerm_storage_account` as a mandatory dependency.
+- **Provider Registration**: The `Microsoft.App` resource provider was not initially registered for the subscription and had to be enabled manually via the Azure CLI.
+- **Managed Identity**: The `azurerm_ai_foundry_hub` and `azurerm_ai_foundry_project` resources require a System-Assigned Managed Identity to be configured for successful deployment.
+- **Unresolved Issue**: There is a persistent and critical error related to mounting a secret as a volume in the `azurerm_container_app`. Multiple syntax variations have failed with the error `ContainerAppVolumeInvalidDefinedFields... storageType 'Secret'`. The correct Terraform syntax for this operation remains unknown.
 
 ## Recent Actions
-- **Tenant Switch:** The user switched from their employer's Azure tenant to a private one to bypass the previous "managed device" AAD policy blocker.
-- **Terraform Plan Failure:** An attempt to run `terraform plan` in the new tenant failed with the error `subscription ID could not be determined and was not specified`.
-- **Authentication Attempt:** I identified that the Azure provider needs to be authenticated. I suggested running `az login` to resolve this, but the user cancelled the operation.
+- **Authentication Fixed**: Successfully resolved initial Terraform authentication problems by hardcoding the subscription ID into the `azurerm` provider block.
+- **Provider Upgraded**: Addressed deprecation warnings by removing the `skip_provider_registration` argument, aligning the configuration with `azurerm` provider v4.0+ standards.
+- **Repository Setup**: Created a `.gitignore` file for Terraform and committed the initial infrastructure code to the repository.
+- **Deployment Summary**: Generated a `DEPLOYMENT_SUMMARY.md` file containing a concise report and a Mermaid diagram of the planned Azure architecture.
+- **Partial Deployment**: Successfully deployed all planned Azure resources *except* for the volume mount configuration on the `azurerm_container_app`. This was done to validate the rest of the infrastructure setup.
 
 ## Current Plan
-1. [DONE] Set up the directory structure and Terraform configuration.
-2. [DONE] Debug initial Terraform configuration errors.
-3. [DONE] Switch to a private Azure tenant to bypass the AAD policy blocker.
-4. [IN PROGRESS] Resolve the Terraform authentication issue in the new tenant.
-5. [TODO] Successfully run `terraform plan` to preview the infrastructure changes.
-6. [TODO] Deploy the infrastructure using `terraform apply`.
-7. [TODO] Validate the deployment after it's successfully applied.
+1.  [IN PROGRESS] Resolve the blocking issue with mounting a secret as a volume in the `azurerm_container_app`.
+2.  [TODO] Successfully apply the complete Terraform configuration, including the volume mount.
+3.  [TODO] Verify the functionality of the deployed LiteLLM proxy endpoint.
 
 ---
 
 ## Summary Metadata
-**Update time**: 2025-10-12T23:27:19.636Z 
+**Update time**: 2025-10-13T00:27:09.803Z 
