@@ -147,7 +147,7 @@ resource "azurerm_container_app" "ca" {
     # Main container mounts the same volume at /app and uses config.yaml
     container {
       name   = "litellm"
-      image  = "ghcr.io/berriai/litellm:v1.75.8-stable"
+      image  = "ghcr.io/berriai/litellm:v1.77.5-stable"
       cpu    = 0.25
       memory = "0.5Gi"
 
@@ -163,7 +163,7 @@ resource "azurerm_container_app" "ca" {
       # Azure OpenAI envs
       env {
         name  = "AZURE_OPENAI_API_BASE"
-        value = azurerm_cognitive_account.openai.endpoint
+        value = "https://azurelit-openai.openai.azure.com"
       }
       env {
         name  = "AZURE_OPENAI_API_VERSION"

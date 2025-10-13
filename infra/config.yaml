@@ -5,8 +5,7 @@ model_list:
   - model_name: gpt-4.1
     litellm_params:
       model: azure/gpt-4.1
-      azure_deployment: gpt-4.1
-      azure_endpoint: os.environ/AZURE_OPENAI_API_BASE
+      api_base: os.environ/AZURE_OPENAI_API_BASE
       api_key: os.environ/AZURE_OPENAI_API_KEY
       api_version: os.environ/AZURE_OPENAI_API_VERSION
 
