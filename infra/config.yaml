@@ -6,11 +6,9 @@ model_list:
     litellm_params:
       model: azure/gpt-4.1
       azure_deployment: gpt-4.1
-      api_base: os.environ/AZURE_OPENAI_API_BASE
+      azure_endpoint: os.environ/AZURE_OPENAI_API_BASE
       api_key: os.environ/AZURE_OPENAI_API_KEY
       api_version: os.environ/AZURE_OPENAI_API_VERSION
-    model_fallbacks:
-      - model_name: azure/gpt-4.1
 
 # Disable DB features and rely on static model_list
 general_settings:
@@ -21,3 +19,4 @@ general_settings:
   disable_adding_master_key_hash_to_db: true
   disable_reset_budget: true
   allow_requests_on_db_unavailable: true
+  timeout: 60
