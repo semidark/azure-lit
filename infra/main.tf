@@ -111,15 +111,10 @@ resource "azurerm_container_app" "ca" {
   resource_group_name          = azurerm_resource_group.rg.name
   revision_mode                = "Single"
 
-  # Config + custom auth source as secrets (written by init container)
+  # Config source as secret (written by init container)
   secret {
     name  = "config-yaml"
     value = file("${path.module}/config.yaml")
-  }
-
-  secret {
-    name  = "custom-auth-py"
-    value = file("${path.module}/custom_auth.py")
   }
 
   # Inject Azure OpenAI key as a Container Apps secret
@@ -135,13 +130,13 @@ resource "azurerm_container_app" "ca" {
   }
 
   template {
-    # Shared volume for config + custom auth module
+    # Shared volume for config
     volume {
       name         = "config-volume"
       storage_type = "EmptyDir"
     }
 
-    # Init container writes config.yaml and custom_auth.py content from secrets to the shared volume
+    # Init container writes config.yaml content from secret to the shared volume
     init_container {
       name   = "init-config"
       image  = "busybox:latest"
@@ -150,16 +145,12 @@ resource "azurerm_container_app" "ca" {
 
       command = ["/bin/sh", "-c"]
       args    = [
-        "printf \"%s\" \"$CONF_YAML\" > /mnt/config/config.yaml && printf \"%s\" \"$CUSTOM_AUTH\" > /mnt/config/custom_auth.py"
+        "printf \"%s\" \"$CONF_YAML\" > /mnt/config/config.yaml"
       ]
 
       env {
         name        = "CONF_YAML"
         secret_name = "config-yaml"
-      }
-      env {
-        name        = "CUSTOM_AUTH"
-        secret_name = "custom-auth-py"
       }
 
       volume_mounts {
@@ -168,7 +159,7 @@ resource "azurerm_container_app" "ca" {
       }
     }
 
-    # Main container mounts the same volume at /app and uses config.yaml + custom_auth.py
+    # Main container mounts the same volume at /app and uses config.yaml
     container {
       name   = "litellm"
       image  = "ghcr.io/berriai/litellm:main-stable"
@@ -177,12 +168,6 @@ resource "azurerm_container_app" "ca" {
 
       command = ["litellm"]
       args = ["--config", "/app/config.yaml", "--port", "4000", "--host", "0.0.0.0", "--detailed_debug"]
-
-      # Ensure Python can import custom_auth.py from /app
-      env {
-        name  = "PYTHONPATH"
-        value = "/app"
-      }
 
       # Master key from Container Apps secret
       env {
