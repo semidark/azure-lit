@@ -136,6 +136,7 @@ resource "azurerm_container_app" "ca" {
       storage_type = "EmptyDir"
     }
 
+    # TODO: Get rid of the init container since it slows down cold start
     # Init container writes config.yaml content from secret to the shared volume
     init_container {
       name   = "init-config"

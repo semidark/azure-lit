@@ -16,11 +16,13 @@ litellm_settings:
 # General proxy settings (no custom_auth)
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY
-  store_model_in_db: false
-  disable_spend_logs: true
-  disable_spend_updates: true
-  disable_adding_master_key_hash_to_db: true
-  disable_reset_budget: true
-  allow_requests_on_db_unavailable: true
-  forward_client_headers_to_llm_api: false
-  timeout: 60
+  store_model_in_db: false # DB-less PoC; avoid persisting model metadata/state
+  disable_spend_logs: true # No budgets/key tracking in PoC; suppress spend logging noise
+  disable_spend_updates: true # Prevent spend counters since MASTER_KEY-only and no DB/Admin UI
+  disable_reset_budget: true # Budgets not enabled; disallow resets to avoid confusion
+
+  ## TODO: We need to check those 
+  # forward_client_headers_to_llm_api: false
+  # disable_adding_master_key_hash_to_db: true
+  # allow_requests_on_db_unavailable: true 
+  # timeout: 60
