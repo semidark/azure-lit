@@ -33,6 +33,12 @@ variable "ai_foundry_project_name" {
   default     = "AzureLIT-Project"
 }
 
+variable "litellm_master_key" {
+  description = "Secure master key for LiteLLM authentication. Should be set via TF_VAR_litellm_master_key environment variable."
+  type        = string
+  sensitive   = true
+}
+
 resource "azurerm_resource_group" "rg" {
   name     = var.resource_group_name
   location = var.location
@@ -105,9 +111,15 @@ resource "azurerm_container_app" "ca" {
   resource_group_name          = azurerm_resource_group.rg.name
   revision_mode                = "Single"
 
+  # Config + custom auth source as secrets (written by init container)
   secret {
     name  = "config-yaml"
     value = file("${path.module}/config.yaml")
+  }
+
+  secret {
+    name  = "custom-auth-py"
+    value = file("${path.module}/custom_auth.py")
   }
 
   # Inject Azure OpenAI key as a Container Apps secret
@@ -116,14 +128,20 @@ resource "azurerm_container_app" "ca" {
     value = azurerm_cognitive_account.openai.primary_access_key
   }
 
+  # Secure master key for LiteLLM authentication
+  secret {
+    name  = "litellm-master-key"
+    value = var.litellm_master_key
+  }
+
   template {
-    # Shared volume for config file
+    # Shared volume for config + custom auth module
     volume {
       name         = "config-volume"
       storage_type = "EmptyDir"
     }
 
-    # Init container writes config.yaml content from secret to the shared volume
+    # Init container writes config.yaml and custom_auth.py content from secrets to the shared volume
     init_container {
       name   = "init-config"
       image  = "busybox:latest"
@@ -131,11 +149,17 @@ resource "azurerm_container_app" "ca" {
       memory = "0.5Gi"
 
       command = ["/bin/sh", "-c"]
-      args    = ["printf \"%s\" \"$CONF_YAML\" > /mnt/config/config.yaml"]
+      args    = [
+        "printf \"%s\" \"$CONF_YAML\" > /mnt/config/config.yaml && printf \"%s\" \"$CUSTOM_AUTH\" > /mnt/config/custom_auth.py"
+      ]
 
       env {
         name        = "CONF_YAML"
         secret_name = "config-yaml"
+      }
+      env {
+        name        = "CUSTOM_AUTH"
+        secret_name = "custom-auth-py"
       }
 
       volume_mounts {
@@ -144,20 +168,26 @@ resource "azurerm_container_app" "ca" {
       }
     }
 
-    # Main container mounts the same volume at /app and uses config.yaml
+    # Main container mounts the same volume at /app and uses config.yaml + custom_auth.py
     container {
       name   = "litellm"
-      image  = "ghcr.io/berriai/litellm:v1.77.5-stable"
+      image  = "ghcr.io/berriai/litellm:main-stable"
       cpu    = 0.25
       memory = "0.5Gi"
 
       command = ["litellm"]
       args = ["--config", "/app/config.yaml", "--port", "4000", "--host", "0.0.0.0", "--detailed_debug"]
 
-      # Master key
+      # Ensure Python can import custom_auth.py from /app
       env {
-        name  = "LITELLM_MASTER_KEY"
-        value = "your-master-key" # Replace with a secure key
+        name  = "PYTHONPATH"
+        value = "/app"
+      }
+
+      # Master key from Container Apps secret
+      env {
+        name        = "LITELLM_MASTER_KEY"
+        secret_name = "litellm-master-key"
       }
 
       # Azure OpenAI envs
@@ -185,7 +215,7 @@ resource "azurerm_container_app" "ca" {
     external_enabled = true
     target_port      = 4000
     traffic_weight {
-      percentage     = 100
+      percentage      = 100
       latest_revision = true
     }
   }
