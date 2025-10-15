@@ -21,7 +21,7 @@ general_settings:
   disable_spend_updates: true # Prevent spend counters since MASTER_KEY-only and no DB/Admin UI
   disable_reset_budget: true # Budgets not enabled; disallow resets to avoid confusion
 
-  ## TODO: We need to check those 
+  ## TODO: We need to check those since when they are enabled they break auth
   # forward_client_headers_to_llm_api: false
   # disable_adding_master_key_hash_to_db: true
   # allow_requests_on_db_unavailable: true 

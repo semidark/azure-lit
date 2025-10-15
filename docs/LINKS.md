@@ -7,6 +7,7 @@ Here’s a curated list of relevant links for your project, spanning LiteLLM, Az
 - LiteLLM Supported Providers: https://docs.litellm.ai/docs/providers
 - LiteLLM Proxy Getting Started: https://docs.litellm.ai/docs/proxy/getting_started
 - LiteLLM Model Metadata Database: https://models.litellm.ai/
+- How are the rules defined in LiteLLM: https://deepwiki.com/search/where-are-the-rules-defined-fo_d05c5467-bcf0-4dde-a1d7-c627f849baa2
 
 ### Azure AI Foundry
 - Azure AI Foundry Overview: https://ai.azure.com/doc/
