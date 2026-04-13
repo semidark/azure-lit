@@ -4,7 +4,7 @@ An OpenAI-compatible LLM gateway powered by [LiteLLM](https://github.com/BerriAI
 
 ## Overview
 
-AzureLIT provides a lightweight, cost-conscious HTTP gateway that exposes Azure AI Foundry models through an OpenAI-compatible interface. It supports streaming chat completions and minimal operational overhead.
+AzureLIT provides a lightweight, cost-conscious HTTP gateway that exposes Azure AI Foundry models through an OpenAI-compatible interface. It supports streaming chat completions, responses-only model deployments, and minimal operational overhead.
 
 **Current State:** Proof-of-Concept (PoC) with LiteLLM Proxy
 
@@ -14,9 +14,10 @@ AzureLIT provides a lightweight, cost-conscious HTTP gateway that exposes Azure 
   - `POST /v1/chat/completions` with streaming support
   - `GET /v1/models` for model discovery
 - **Multi-Model Support**: Declarative `var.models` map — add a model with one Terraform map entry
-- **Authentication**: MASTER_KEY-only authentication (PoC); per-user virtual keys planned for MVP
+- **Authentication**: Custom auth handler validates distributed client API keys and the master key
 - **Infrastructure as Code**: Fully automated deployment via Terraform
 - **Observability**: Azure Monitor integration with metadata-only logging (no prompt/response content)
+- **Hardened Deployment**: Pinned LiteLLM image, HTTPS-only ingress, disabled UI/key routes, and constrained scale settings
 
 ## Quick Start
 
@@ -42,8 +43,11 @@ cp example.env .env
 # Required - Your Azure subscription ID
 TF_VAR_subscription_id=your-subscription-id
 
-# Required - Master key for client authentication (must start with 'sk-')
+# Required - Master key for admin/operator access (must start with 'sk-')
 TF_VAR_litellm_master_key=sk-your-secure-master-key
+
+# Required - Comma-separated client API keys distributed to consumers
+TF_VAR_api_keys=sk-clientA,sk-clientB
 
 # Optional - Override defaults
 TF_VAR_location=germanywestcentral
@@ -75,18 +79,18 @@ container_app_url  = "https://litellm-proxy.<env>.<region>.azurecontainerapps.io
 ### Test the Deployment
 
 ```bash
-# Set your deployed URL and master key
+# Set your deployed URL and a client API key
 ENDPOINT="https://<your-container-app-fqdn>"
-MASTER_KEY="sk-your-master-key"
+API_KEY="sk-clientA"
 
 # List available models
 curl -sS \
-  -H "Authorization: Bearer $MASTER_KEY" \
+  -H "Authorization: Bearer $API_KEY" \
   "$ENDPOINT/v1/models"
 
 # Test chat completion
 curl -sS \
-  -H "Authorization: Bearer $MASTER_KEY" \
+  -H "Authorization: Bearer $API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "model": "gpt-4.1",
@@ -97,7 +101,7 @@ curl -sS \
 
 # Test with streaming
 curl -sS \
-  -H "Authorization: Bearer $MASTER_KEY" \
+  -H "Authorization: Bearer $API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "model": "grok-4-20-reasoning",
@@ -113,7 +117,7 @@ curl -sS \
 from openai import OpenAI
 
 client = OpenAI(
-    api_key="sk-your-master-key",
+    api_key="sk-clientA",
     base_url="https://<your-container-app-fqdn>"
 )
 
@@ -135,15 +139,17 @@ print(response.choices[0].message.content)
 │   ├── openai.tf            # var.models map, AIServices account, Foundry project, deployments
 │   ├── kv.tf                # Comment-only; Key Vault removed in new Foundry
 │   ├── config.yaml.tpl      # LiteLLM Proxy config template (rendered by Terraform)
-│   ├── outputs.tf           # Deployment outputs (FQDN, URL, endpoints)
+│   ├── custom_auth.py       # Custom auth handler injected into the container
+│   ├── outputs.tf           # Deployment outputs (FQDN, URL)
+│   ├── rai.tf               # Permissive RAI policies for primary/regional accounts
 │   ├── example.env          # Example environment variables
 │   └── .env                 # Your secrets (gitignored)
 ├── docs/                     # Design and operational documentation
 │   ├── PRD.md               # Product Requirements Document (MVP scope)
 │   ├── POC.md               # Proof-of-Concept approach (current)
-│   ├── DEPLOYMENT_SUMMARY.md
-│   ├── MASTER_KEY_MANAGEMENT.md
-│   ├── CUSTOM_AUTH.md
+│   ├── DEPLOYMENT_SUMMARY.md # Operational summary
+│   ├── MASTER_KEY_MANAGEMENT.md # Master/client key operations
+│   ├── CUSTOM_AUTH.md       # Custom auth behavior and limits
 │   └── LINKS.md             # External references
 └── AGENTS.md                 # Agent-specific project context
 ```
@@ -163,12 +169,19 @@ graph LR
         OSS["gpt-oss-120b<br/>(GlobalStandard)"]
         Kimi["Kimi-K2.5<br/>(GlobalStandard)"]
         Grok["grok-4-20-reasoning<br/>(GlobalStandard)"]
+        GPT54["gpt-5.4<br/>(GlobalStandard)"]
+    end
+
+    subgraph Azure AIServices Account - swedencentral
+        Codex["gpt-5.3-codex<br/>(GlobalStandard, Responses API)"]
     end
 
     LiteLLM -->|azure/gpt-4.1| GPT41
     LiteLLM -->|azure/gpt-oss-120b| OSS
     LiteLLM -->|azure/Kimi-K2.5| Kimi
     LiteLLM -->|azure/grok-4-20-reasoning| Grok
+    LiteLLM -->|azure/gpt-5.4| GPT54
+    LiteLLM -->|azure/responses/gpt-5.3-codex| Codex
 
     subgraph Supporting Services
         LA["Log Analytics<br/>Metadata Logging"]
@@ -181,33 +194,38 @@ graph LR
 
 - **Azure Container Apps**: Hosts LiteLLM Proxy with external HTTPS ingress
 - **Azure AIServices Cognitive Account** (`kind = "AIServices"`): Unified Foundry resource hosting all model deployments
+- **Regional AIServices Accounts**: Created automatically when `var.models` targets a non-primary region
 - **Azure Foundry Project** (`azurerm_cognitive_account_project`): Created automatically; used by models requiring project-scoped deployment (`project = true`)
 - **Log Analytics**: Metadata-only logging (no prompt/response content)
 
 ### Default Models
 
-| Model | Format | SKU | LiteLLM identifier |
-|-------|--------|-----|--------------------|
-| `gpt-4.1` | `OpenAI` | DataZoneStandard | `azure/gpt-4.1` |
-| `gpt-oss-120b` | `OpenAI-OSS` | GlobalStandard | `azure/gpt-oss-120b` |
-| `Kimi-K2.5` | `MoonshotAI` | GlobalStandard | `azure/Kimi-K2.5` |
-| `grok-4-20-reasoning` | `xAI` | GlobalStandard | `azure/grok-4-20-reasoning` |
+| Model | Format | SKU | Region | LiteLLM identifier |
+|-------|--------|-----|--------|--------------------|
+| `gpt-4.1` | `OpenAI` | DataZoneStandard | `germanywestcentral` | `azure/gpt-4.1` |
+| `gpt-oss-120b` | `OpenAI-OSS` | GlobalStandard | `germanywestcentral` | `azure/gpt-oss-120b` |
+| `Kimi-K2.5` | `MoonshotAI` | GlobalStandard | `germanywestcentral` | `azure/Kimi-K2.5` |
+| `grok-4-20-reasoning` | `xAI` | GlobalStandard | `germanywestcentral` | `azure/grok-4-20-reasoning` |
+| `gpt-5.4` | `OpenAI` | GlobalStandard | `germanywestcentral` | `azure/gpt-5.4` |
+| `gpt-5.3-codex` | `OpenAI` | GlobalStandard | `swedencentral` | `azure/responses/gpt-5.3-codex` |
 
-All models are declared in the `var.models` map in `infra/openai.tf`. Adding a model = one map entry + `terraform apply`.
+All models are declared in the `var.models` map in `infra/openai.tf`. Adding a model = one map entry + `terraform apply`. Responses-only models set `responses_only = true` and are rendered with LiteLLM's `azure/responses/` prefix plus `api_version=preview`.
 
 ## Authentication
 
-The PoC uses **MASTER_KEY-only authentication**:
+The PoC uses a custom auth handler in `infra/custom_auth.py`:
 
-- Set `TF_VAR_litellm_master_key` with a value starting with `sk-`
-- All clients must include `Authorization: Bearer <MASTER_KEY>` header
-- No per-user keys, budgets, or Admin UI in PoC (planned for MVP)
+- Set `TF_VAR_api_keys` to a comma-separated list of distributed client keys
+- Set `TF_VAR_litellm_master_key` with a value starting with `sk-` for operator/admin use
+- Clients authenticate with `Authorization: Bearer <api_key>`
+- The custom auth handler also accepts the master key so admin operations still work
+- No per-key budgets or model restrictions yet
 
 See [docs/MASTER_KEY_MANAGEMENT.md](docs/MASTER_KEY_MANAGEMENT.md) for details.
 
 ## Roadmap
 
-- **PoC (Current)**: LiteLLM Proxy on Container Apps, MASTER_KEY auth, dynamic model map
+- **PoC (Current)**: LiteLLM Proxy on Container Apps, custom auth with client API keys, dynamic model map
 - **MVP v0.1**: Custom FastAPI gateway, Table Storage key validation, Azure Monitor
 - **MVP v0.2**: Streaming support, dual-surface routing
 - **MVP v0.3**: Model discovery poller, `/v1/models` endpoint
@@ -220,6 +238,8 @@ See [docs/PRD.md](docs/PRD.md) for full MVP scope.
 - **Secrets**: Never commit `.env` or `*.tfvars` files (both are gitignored)
 - **Logging**: No prompt/response content is logged; only metadata (timestamps, latency, token counts)
 - **HTTPS Only**: Container Apps enforces TLS on external ingress
+- **Proxy Hardening**: `disable_admin_ui: true`, `disable_key_management: true`, `drop_params: true`, `drop_unknown_params: true`
+- **Runtime Hardening**: LiteLLM image pinned to `ghcr.io/berriai/litellm:main-v1.82.3`, `min_replicas = 0`, `max_replicas = 1`, `cooldown_period_in_seconds = 600`
 - **Least Privilege**: Managed identities used where possible
 
 ## Documentation
@@ -227,8 +247,8 @@ See [docs/PRD.md](docs/PRD.md) for full MVP scope.
 - [PRD](docs/PRD.md) - Product Requirements Document
 - [POC](docs/POC.md) - Proof-of-Concept deployment guide
 - [DEPLOYMENT_SUMMARY](docs/DEPLOYMENT_SUMMARY.md) - Operational summary
-- [MASTER_KEY_MANAGEMENT](docs/MASTER_KEY_MANAGEMENT.md) - Authentication details
-- [CUSTOM_AUTH](docs/CUSTOM_AUTH.md) - Future custom auth implementation
+- [MASTER_KEY_MANAGEMENT](docs/MASTER_KEY_MANAGEMENT.md) - Master/client key operations
+- [CUSTOM_AUTH](docs/CUSTOM_AUTH.md) - Current custom auth implementation
 - [LINKS](docs/LINKS.md) - External references
 
 ## License

@@ -10,7 +10,7 @@
   - GET /v1/models
 - Authentication:
   - Single-tenant API key auth via custom key store (Azure Table Storage) for MVP
-  - PoC uses MASTER_KEY-only authentication (no database, no virtual keys)
+  - PoC uses `custom_auth.py` with client API keys (`TF_VAR_api_keys`) plus a master key (`TF_VAR_litellm_master_key`); no database or virtual keys
 - Discovery:
   - Poll Azure AI Foundry to auto-expose models
 - Routing:
@@ -33,7 +33,7 @@
   - Azure Container Apps with external HTTPS ingress; autoscaling and low ops
 - Auth and Keys:
   - MVP: Table Storage-backed key store; validate Bearer token per request (no rate limiting or quotas initially)
-  - PoC: MASTER_KEY-only auth; all clients share the same credential; no per-user budgets/permissions; Admin UI not used
+  - PoC: `custom_auth.py` validates distributed client API keys plus the master key; no per-user budgets/permissions; Admin UI and key-management routes disabled
 - Secrets:
   - Store only essential provider credentials (e.g., Azure OpenAI/Foundry keys) in Azure Key Vault to control cost (PoC may use Container Apps secrets)
 - Backend Surfaces:
@@ -79,7 +79,7 @@
   - Map aliases to backend surfaces; parameter mapping handled by LiteLLM wherever possible
 - Auth
   - MVP: Bearer token validation against Table Storage (no throttling or quotas)
-  - PoC: MASTER_KEY-only validation
+  - PoC: Bearer token validation via `custom_auth.py` against `API_KEYS` and `LITELLM_MASTER_KEY`
 
 ## Non-Functional Requirements
 - Performance: First token target under ~2–3 seconds; stable streaming under expected loads (1–100 users)

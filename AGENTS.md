@@ -55,7 +55,7 @@ LiteLLM Proxy runs as a Container App with external HTTPS ingress on port 4000.
 
 - **Config injection**: A secret volume mounts all Container App secrets as files at `/mnt/secrets`. The container entrypoint copies `config-yaml` → `/app/config.yaml` and `custom-auth-py` → `/app/custom_auth.py` into an EmptyDir volume before starting LiteLLM. Changes require redeploy (`terraform apply`).
 - **Auth**: `custom_auth.py` validates Bearer tokens against client API keys (`API_KEYS` env var) and the master key (`LITELLM_MASTER_KEY`). No DB, no virtual keys, no Admin UI. `/ui` and `/key/*` routes are disabled.
-- **Models**: Defined in `var.models` map in `openai.tf`. Currently: `gpt-4.1`, `gpt-oss-120b`, `Kimi-K2.5`, `grok-4-20-reasoning` — all on the primary AIServices account. Adding a model = one map entry + `terraform apply`.
+- **Models**: Defined in `var.models` map in `openai.tf`. Currently: `gpt-4.1`, `gpt-oss-120b`, `Kimi-K2.5`, `grok-4-20-reasoning`, `gpt-5.4`, and `gpt-5.3-codex`. Most are on the primary AIServices account; `gpt-5.3-codex` is regional in `swedencentral` and uses LiteLLM's responses-only wiring.
 - **Container image**: `ghcr.io/berriai/litellm:main-v1.82.3` (pinned)
 - **Upstream auth**: API key per Cognitive Account region, stored as Container App secrets (`azure-ai-key-<region>`), injected as `AZURE_AI_API_KEY_<REGION>` env vars.
 
@@ -84,6 +84,7 @@ Full setup in `docs/DEPLOYMENT_SUMMARY.md`.
 
 - `config.yaml.tpl` or `custom_auth.py` changes only take effect on redeploy — no hot reload.
 - `litellm_settings.drop_params: true` — prevents clients from overriding provider credentials at request time.
+- `litellm_settings.drop_unknown_params: true` — strips unsupported request fields before they reach upstream providers.
 - `custom_auth.py` caches valid keys in memory on first request. Key changes require redeploy to take effect.
 - `custom_auth` replaces LiteLLM's built-in master key check entirely — the handler explicitly also accepts `LITELLM_MASTER_KEY` so admin operations keep working.
 - No content logging (prompts/responses); metadata-only with 30-day retention in Log Analytics.

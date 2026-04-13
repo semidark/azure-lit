@@ -29,27 +29,30 @@ This Terraform plan deploys an OpenAI-compatible LiteLLM Proxy gateway on Azure 
 1. Azure Container App running the LiteLLM Proxy with external HTTPS ingress.
 2. Azure AIServices Cognitive Account (`kind = "AIServices"`) — unified Foundry resource serving all models.
 3. Azure Foundry Project (`azurerm_cognitive_account_project`) — always created; required by models with `project = true`.
-4. Model deployments driven by `var.models` map. Currently: `gpt-4.1`, `gpt-oss-120b`, `Kimi-K2.5`, `grok-4-20-reasoning` — all account-scoped on the primary account.
+4. Model deployments driven by `var.models` map. Currently: `gpt-4.1`, `gpt-oss-120b`, `Kimi-K2.5`, `grok-4-20-reasoning`, `gpt-5.4`, and `gpt-5.3-codex`.
 5. Log Analytics Workspace for observability.
 
 #### Model Routing
 
-All current models share the same AIServices account endpoint and API key (`azure-ai-key-gwc` Container Apps secret):
+Most models share the primary AIServices account endpoint and API key (`azure-ai-key-gwc` Container Apps secret). `gpt-5.3-codex` is deployed in Sweden Central and uses its own regional account and secret (`azure-ai-key-swc`).
 
-| Model | Format | SKU | Scoped to |
-|---|---|---|---|
-| `gpt-4.1` | `OpenAI` | DataZoneStandard | Account |
-| `gpt-oss-120b` | `OpenAI-OSS` | GlobalStandard | Account |
-| `Kimi-K2.5` | `MoonshotAI` | GlobalStandard | Account |
-| `grok-4-20-reasoning` | `xAI` | GlobalStandard | Account |
+| Model | Format | SKU | Region | API Surface |
+|---|---|---|---|---|
+| `gpt-4.1` | `OpenAI` | DataZoneStandard | germanywestcentral | Chat Completions |
+| `gpt-oss-120b` | `OpenAI-OSS` | GlobalStandard | germanywestcentral | Chat Completions |
+| `Kimi-K2.5` | `MoonshotAI` | GlobalStandard | germanywestcentral | Chat Completions |
+| `grok-4-20-reasoning` | `xAI` | GlobalStandard | germanywestcentral | Chat Completions |
+| `gpt-5.4` | `OpenAI` | GlobalStandard | germanywestcentral | Chat Completions |
+| `gpt-5.3-codex` | `OpenAI` | GlobalStandard | swedencentral | Responses API only |
 
-Clients choose by model name via a single OpenAI-compatible surface. Endpoints: `/v1/chat/completions` (streaming supported) and `/v1/models`.
+Clients choose by model name via a single OpenAI-compatible surface. Standard chat models use `/v1/chat/completions` (streaming supported). Responses-only models such as `gpt-5.3-codex` are wired with LiteLLM's `azure/responses/` prefix and `api_version=preview`.
 
 #### Adding Models
 
 Add one entry to `var.models` in `openai.tf` and run `terraform apply`. Terraform automatically:
 - Creates a new regional Cognitive Account if `region` differs from primary
 - Deploys the model (account-scoped via `azurerm_cognitive_deployment`; project-scoped via `azapi_resource`)
+- Uses the Responses API wiring automatically when `responses_only = true`
 - Regenerates and re-injects `config.yaml` with correct env var references
 - Updates Container App secrets and env vars
 
@@ -78,7 +81,10 @@ Authorization: Bearer <api_key>
 #### Additional Hardening
 
 - `litellm_settings.drop_params: true` — prevents clients from overriding provider credentials.
+- `litellm_settings.drop_unknown_params: true` — strips unknown request fields before proxying upstream.
 - DB features disabled (`store_model_in_db: false`, `disable_spend_logs: true`, etc.) — no database in use.
+- Admin UI and key-management routes disabled (`disable_admin_ui: true`, `disable_key_management: true`).
+- Container image pinned to `ghcr.io/berriai/litellm:main-v1.82.3`, HTTPS-only ingress, `min_replicas = 0`, `max_replicas = 1`, and `cooldown_period_in_seconds = 600`.
 
 ### Notes
 

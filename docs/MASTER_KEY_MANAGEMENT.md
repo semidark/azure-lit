@@ -68,7 +68,7 @@ openssl rand -base64 32 | tr -d "=+/" | cut -c1-40 | sed 's/^/sk-/'
 - `custom_auth` replaces LiteLLM's built-in master key check entirely.
 - Keys are loaded from env vars on first request and cached for the process lifetime.
 - Key changes take effect only after redeploy (new Container App revision).
-- No DB, no virtual keys, no Admin UI.
+- No DB, no virtual keys, no Admin UI or key-management routes.
 
 ## Security Notes
 

@@ -6,7 +6,7 @@ API keys. No database required — keys are injected as a Container App secret.
 ## How It Works
 
 1. `custom_auth.py` is rendered as a Container Apps secret (`custom-auth-py`)
-2. The init container writes it to `/app/custom_auth.py` alongside `config.yaml`
+2. The main container entrypoint copies it to `/app/custom_auth.py` alongside `config.yaml`
 3. LiteLLM loads it via `general_settings.custom_auth: custom_auth.user_api_key_auth`
 4. On each request, the handler validates the Bearer token against the key set
 5. Keys are loaded from `API_KEYS` env var on first request and cached in memory
@@ -62,3 +62,4 @@ curl https://<fqdn>/v1/chat/completions \
 - No spend tracking per key
 - No Admin UI
 - Keys cached in memory — process restart (new revision) picks up changes
+- All responses-only models are still controlled by the same key set as chat models
