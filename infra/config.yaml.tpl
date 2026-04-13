@@ -18,6 +18,13 @@ litellm_settings:
 # General proxy settings
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY
+
+  # Custom auth handler — validates Bearer tokens against API_KEYS env var.
+  # Runs before LiteLLM's built-in master_key check and replaces it entirely.
+  # The handler also accepts LITELLM_MASTER_KEY so admin operations still work.
+  # File is injected into /app/ by the init container alongside this config.
+  custom_auth: custom_auth.user_api_key_auth
+
   store_model_in_db: false
   disable_spend_logs: true
   disable_spend_updates: true
