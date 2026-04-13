@@ -39,6 +39,12 @@ variable "litellm_master_key" {
   sensitive   = true
 }
 
+variable "api_keys" {
+  description = "Comma-separated list of API keys for client auth (e.g. sk-key1,sk-key2). Set via TF_VAR_api_keys."
+  type        = string
+  sensitive   = true
+}
+
 # =============================================================================
 # CORE INFRASTRUCTURE
 # =============================================================================
@@ -73,6 +79,8 @@ locals {
     region_short = local.region_short
   })
 
+  custom_auth_py = file("${path.module}/custom_auth.py")
+
   # Flattened list of {env_key, secret_name, endpoint} per distinct region
   # Used to build dynamic Container App secrets + env vars
   distinct_regions = toset([for k, m in var.models : m.region])
@@ -100,6 +108,18 @@ resource "azurerm_container_app" "ca" {
     value = var.litellm_master_key
   }
 
+  # Client API keys — comma-separated, validated by custom_auth.py
+  secret {
+    name  = "api-keys"
+    value = var.api_keys
+  }
+
+  # custom_auth.py source — injected into /app/ by init container
+  secret {
+    name  = "custom-auth-py"
+    value = local.custom_auth_py
+  }
+
   # One API key secret per distinct region
   dynamic "secret" {
     for_each = local.distinct_regions
@@ -123,11 +143,16 @@ resource "azurerm_container_app" "ca" {
       memory = "1.0Gi"
 
       command = ["/bin/sh", "-c"]
-      args    = ["printf \"%s\" \"$CONF_YAML\" > /mnt/config/config.yaml"]
+      args    = ["printf \"%s\" \"$CONF_YAML\" > /mnt/config/config.yaml && printf \"%s\" \"$CUSTOM_AUTH\" > /mnt/config/custom_auth.py"]
 
       env {
         name        = "CONF_YAML"
         secret_name = "config-yaml"
+      }
+
+      env {
+        name        = "CUSTOM_AUTH"
+        secret_name = "custom-auth-py"
       }
 
       volume_mounts {
@@ -143,11 +168,16 @@ resource "azurerm_container_app" "ca" {
       memory = "1.0Gi"
 
       command = ["litellm"]
-      args    = ["--config", "/app/config.yaml", "--port", "4000", "--host", "0.0.0.0", "--detailed_debug"]
+      args    = ["--config", "/app/config.yaml", "--port", "4000", "--host", "0.0.0.0"]
 
       env {
         name        = "LITELLM_MASTER_KEY"
         secret_name = "litellm-master-key"
+      }
+
+      env {
+        name        = "API_KEYS"
+        secret_name = "api-keys"
       }
 
       # Shared API version for all Azure AI endpoints

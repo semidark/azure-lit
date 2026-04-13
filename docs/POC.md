@@ -1,20 +1,21 @@
 # Proof-of-Concept (PoC) — LiteLLM Proxy on Azure Container Apps
 
-Goal: Validate OpenAI-compatible API (including streaming) via LiteLLM Proxy, fronting Azure AI Foundry model deployments, with minimal infrastructure and a single shared credential.
+Goal: Validate OpenAI-compatible API (including streaming) via LiteLLM Proxy, fronting Azure AI Foundry model deployments, with minimal infrastructure and per-client API key auth.
 
 ## Scope
 - OpenAI-compatible endpoints: `/v1/chat/completions` (streaming supported) and `/v1/models`
 - Dynamic model list via `config.yaml.tpl` (generated from `var.models` Terraform map — no manual config editing)
 - External HTTPS ingress on Azure Container Apps
-- Authentication: MASTER_KEY-only (no database, no virtual keys)
-- Minimal secrets footprint (Container Apps secrets; no Key Vault in PoC)
+- Authentication: custom auth handler validating client API keys injected via Container App secrets
+- Minimal secrets footprint (Container Apps secrets; no Key Vault)
 - Region default: Germany West Central
 
 ## Architecture
 - Azure Container App runs the official LiteLLM Proxy image (`ghcr.io/berriai/litellm:main-stable`)
 - Single Azure AIServices Cognitive Account (`kind = "AIServices"`) hosts all model deployments
 - All models deployed directly on the account (`project = false` by default); Foundry project exists for models that require it (`project = true`)
-- `config.yaml` is rendered by Terraform from `config.yaml.tpl` and injected as a Container Apps secret
+- `config.yaml` and `custom_auth.py` are rendered/read by Terraform and injected as Container Apps secrets
+- An init container writes both files to `/app/` at startup via an EmptyDir volume
 - Environment variables provide provider credentials per region (`AZURE_AI_API_BASE_<REGION>`, `AZURE_AI_API_KEY_<REGION>`, `AZURE_AI_API_VERSION`)
 - Logs to Log Analytics via Container Apps
 
@@ -53,44 +54,42 @@ model_list:
 
 Clients select by `model_name`. Adding a model to `var.models` + `terraform apply` is sufficient — no manual config editing.
 
-## Authentication — MASTER_KEY Only
-- Set a single MASTER_KEY for the proxy via either:
-  - Environment variable: `LITELLM_MASTER_KEY`, or
-  - `general_settings.master_key` in `config.yaml.tpl`
-- When a MASTER_KEY is set, LiteLLM enforces client authentication: clients MUST include the master key in the Authorization header for all requests.
+## Authentication
+
+`custom_auth.py` validates Bearer tokens against two sources:
+
+- **`API_KEYS`** env var — comma-separated client API keys set via `TF_VAR_api_keys`
+- **`LITELLM_MASTER_KEY`** env var — master key for admin operations
+
+`custom_auth` replaces LiteLLM's built-in auth entirely. Keys are cached in memory on first request; rotation requires `terraform apply`.
 
 Client header format:
 ```
-Authorization: Bearer <MASTER_KEY>
+Authorization: Bearer <api_key>
 ```
-Notes:
-- The MASTER_KEY must start with `sk-` to be considered valid
-- Without a database, all clients share the same credential (the MASTER_KEY)
-- Without setting any MASTER_KEY, the proxy is unauthenticated (suitable only for local development)
 
-What you cannot do without a database:
-- Create per-client virtual keys with budgets/permissions
-- Track spending per key/user/team
-- Use the Admin UI for key management
+See `docs/CUSTOM_AUTH.md` for key management workflow.
 
 ## Streaming Behavior
 - Clients set `stream=true`; LiteLLM emits OpenAI-style `chat.completion.chunk` events until completion
 
 ## Client Example
+
 Python (OpenAI SDK-compatible):
 ```python
 from openai import OpenAI
-client = OpenAI(api_key="<MASTER_KEY>", base_url="https://<your-container-app>")
+client = OpenAI(api_key="<api_key>", base_url="https://<your-container-app>")
 resp = client.chat.completions.create(
     model="gpt-4.1",
     messages=[{"role":"user","content":"hello"}]
 )
 print(resp.choices[0].message.content)
 ```
+
 Curl:
 ```bash
 curl -sS \
-  -H "Authorization: Bearer <MASTER_KEY>" \
+  -H "Authorization: Bearer <api_key>" \
   -H "Content-Type: application/json" \
   -d '{
     "model": "gpt-4.1",
@@ -106,25 +105,26 @@ curl -sS \
 - Foundry Project (`azurerm_cognitive_account_project`) — always created; used by `project = true` models
 - Model deployments driven by `var.models` map:
   - Account-scoped: `azurerm_cognitive_deployment.primary_account` / `remote_account`
-  - Project-scoped: `azapi_resource.primary_project` / `remote_project` (azapi required — `azurerm_cognitive_deployment` does not accept project IDs)
+  - Project-scoped: `azapi_resource.primary_project` / `remote_project` (azapi required)
 - Container App:
   - Image: LiteLLM Proxy (`ghcr.io/berriai/litellm:main-stable`)
   - Target port: 4000
-  - Env: `AZURE_AI_API_VERSION`, `LITELLM_MASTER_KEY` (secret), `AZURE_AI_API_BASE_<REGION>` and `AZURE_AI_API_KEY_<REGION>` (one pair per distinct region in model map)
-  - `config.yaml` injection via secret + init container mounting into `/app/config.yaml`
+  - Env: `AZURE_AI_API_VERSION`, `LITELLM_MASTER_KEY`, `API_KEYS` (secrets), `AZURE_AI_API_BASE_<REGION>` and `AZURE_AI_API_KEY_<REGION>` per region
+  - `config.yaml` + `custom_auth.py` injected via init container into `/app/`
 
 ## Security
-- Store provider keys and `LITELLM_MASTER_KEY` as Container Apps secrets; never commit to git
+- Store all secrets as Container Apps secrets; never commit to git
 - Use HTTPS only
-- Restrict ingress (IP allowlist) if needed for testing
+- `litellm_settings.drop_params: true` prevents clients overriding provider credentials
 
-## Limitations (Intentional in PoC)
+## Limitations
 - No dynamic model discovery; redeploy to change `model_list`
-- No per-user keys, budgets, or Admin UI
-- Chat completions only; other endpoints out of scope
+- No per-key model restrictions (all keys access all models)
+- No spend tracking per key
+- Key rotation requires `terraform apply`
 
-## Next Steps Toward MVP
-- Introduce a key store (e.g., Table Storage) for per-client virtual keys
-- Add model discovery and `/v1/models` backed by a catalog
-- Streamlined routing across Azure OpenAI and Azure AI Foundry serverless endpoints
+## Next Steps
+- Per-key model access restrictions (extend `custom_auth.py`)
+- Spend tracking / rate limiting (Azure Table Storage counters)
 - Telemetry to Azure Monitor (latency, errors, token counts)
+- Remove init container pattern — use secret volume mounts directly
