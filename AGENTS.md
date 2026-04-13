@@ -53,7 +53,7 @@ terraform apply tfplan
 
 LiteLLM Proxy runs as a Container App with external HTTPS ingress on port 4000.
 
-- **Config injection**: An init container writes `config.yaml` and `custom_auth.py` from Container Apps secrets into an EmptyDir volume mounted at `/app`. Changes to either require redeploy (`terraform apply`).
+- **Config injection**: A secret volume mounts all Container App secrets as files at `/mnt/secrets`. The container entrypoint copies `config-yaml` → `/app/config.yaml` and `custom-auth-py` → `/app/custom_auth.py` into an EmptyDir volume before starting LiteLLM. Changes require redeploy (`terraform apply`).
 - **Auth**: `custom_auth.py` validates Bearer tokens against client API keys (`API_KEYS` env var) and the master key (`LITELLM_MASTER_KEY`). No DB, no virtual keys, no Admin UI.
 - **Models**: Defined in `var.models` map in `openai.tf`. Currently: `gpt-4.1`, `gpt-oss-120b`, `Kimi-K2.5`, `grok-4-20-reasoning` — all on the primary AIServices account. Adding a model = one map entry + `terraform apply`.
 - **Container image**: `ghcr.io/berriai/litellm:main-stable`
@@ -86,11 +86,10 @@ Full setup in `docs/DEPLOYMENT_SUMMARY.md`.
 - `custom_auth.py` caches valid keys in memory on first request. Key changes require redeploy to take effect.
 - `custom_auth` replaces LiteLLM's built-in master key check entirely — the handler explicitly also accepts `LITELLM_MASTER_KEY` so admin operations keep working.
 - No content logging (prompts/responses); metadata-only with 30-day retention in Log Analytics.
-- The init container pattern adds cold-start latency (TODO in `main.tf` to remove).
+- The secret volume at `/mnt/secrets` contains **all** Container App secrets as files (including `litellm-master-key`, `api-keys`, etc.) — only `config-yaml` and `custom-auth-py` are used; the rest are harmless extras.
 
 ## Next Steps
 
 - Per-key model access restrictions (extend `custom_auth.py` to map keys → allowed models)
 - Spend tracking / rate limiting without DB (e.g. Azure Table Storage counters)
 - Telemetry to Azure Monitor (latency, errors, token counts)
-- Remove init container pattern — bake config into image or use secret volume mounts directly

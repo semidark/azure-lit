@@ -15,7 +15,7 @@ Goal: Validate OpenAI-compatible API (including streaming) via LiteLLM Proxy, fr
 - Single Azure AIServices Cognitive Account (`kind = "AIServices"`) hosts all model deployments
 - All models deployed directly on the account (`project = false` by default); Foundry project exists for models that require it (`project = true`)
 - `config.yaml` and `custom_auth.py` are rendered/read by Terraform and injected as Container Apps secrets
-- An init container writes both files to `/app/` at startup via an EmptyDir volume
+- A secret volume mounts all secrets as files at `/mnt/secrets`; the container entrypoint copies `config-yaml` → `/app/config.yaml` and `custom-auth-py` → `/app/custom_auth.py` before starting LiteLLM
 - Environment variables provide provider credentials per region (`AZURE_AI_API_BASE_<REGION>`, `AZURE_AI_API_KEY_<REGION>`, `AZURE_AI_API_VERSION`)
 - Logs to Log Analytics via Container Apps
 
@@ -110,7 +110,7 @@ curl -sS \
   - Image: LiteLLM Proxy (`ghcr.io/berriai/litellm:main-stable`)
   - Target port: 4000
   - Env: `AZURE_AI_API_VERSION`, `LITELLM_MASTER_KEY`, `API_KEYS` (secrets), `AZURE_AI_API_BASE_<REGION>` and `AZURE_AI_API_KEY_<REGION>` per region
-  - `config.yaml` + `custom_auth.py` injected via init container into `/app/`
+  - `config.yaml` + `custom_auth.py` injected via secret volume mount + entrypoint copy into `/app/`
 
 ## Security
 - Store all secrets as Container Apps secrets; never commit to git
@@ -127,4 +127,3 @@ curl -sS \
 - Per-key model access restrictions (extend `custom_auth.py`)
 - Spend tracking / rate limiting (Azure Table Storage counters)
 - Telemetry to Azure Monitor (latency, errors, token counts)
-- Remove init container pattern — use secret volume mounts directly

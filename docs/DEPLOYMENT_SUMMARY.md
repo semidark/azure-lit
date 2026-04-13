@@ -58,8 +58,8 @@ Add one entry to `var.models` in `openai.tf` and run `terraform apply`. Terrafor
 `config.yaml` is rendered by Terraform's `templatefile()` from `infra/config.yaml.tpl`, then injected as a Container Apps secret. `custom_auth.py` is read from disk and injected the same way.
 
 - Secrets `config-yaml` and `custom-auth-py` store the rendered/read file contents.
-- The init container (busybox) writes both files to an EmptyDir volume at `/app`.
-- The LiteLLM container mounts `/app` and reads both files on startup.
+- A secret volume mounts all Container App secrets as files at `/mnt/secrets` inside the LiteLLM container.
+- The container entrypoint copies `config-yaml` → `/app/config.yaml` and `custom-auth-py` → `/app/custom_auth.py` into an EmptyDir volume, then `exec`s LiteLLM. No init container required.
 
 #### Authentication
 

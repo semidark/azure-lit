@@ -14,6 +14,8 @@ model_list:
 # Prevent clients from overriding sensitive provider fields at request-time
 litellm_settings:
   drop_params: true
+  set_verbose: false
+  json_logs: true
 
 # General proxy settings
 general_settings:
@@ -22,7 +24,7 @@ general_settings:
   # Custom auth handler — validates Bearer tokens against API_KEYS env var.
   # Runs before LiteLLM's built-in master_key check and replaces it entirely.
   # The handler also accepts LITELLM_MASTER_KEY so admin operations still work.
-  # File is injected into /app/ by the init container alongside this config.
+  # File is copied to /app/custom_auth.py by the container entrypoint at startup.
   custom_auth: custom_auth.user_api_key_auth
 
   store_model_in_db: false

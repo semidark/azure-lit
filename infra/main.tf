@@ -114,7 +114,7 @@ resource "azurerm_container_app" "ca" {
     value = var.api_keys
   }
 
-  # custom_auth.py source — injected into /app/ by init container
+  # custom_auth.py source — copied to /app/custom_auth.py by container entrypoint
   secret {
     name  = "custom-auth-py"
     value = local.custom_auth_py
@@ -130,35 +130,19 @@ resource "azurerm_container_app" "ca" {
   }
 
   template {
+    # Secret volume: all Container App secrets are mounted as files.
+    # Only config-yaml and custom-auth-py are used; the rest are harmless extras.
+    volume {
+      name         = "secrets-volume"
+      storage_type = "Secret"
+    }
+
+    # EmptyDir at /app: receives properly-named copies of config.yaml and custom_auth.py.
+    # Necessary because secret names (config-yaml, custom-auth-py) are not valid
+    # filenames for LiteLLM's --config path or Python's importlib.
     volume {
       name         = "config-volume"
       storage_type = "EmptyDir"
-    }
-
-    # TODO: Remove init container (cold start overhead)
-    init_container {
-      name   = "init-config"
-      image  = "busybox:latest"
-      cpu    = 0.5
-      memory = "1.0Gi"
-
-      command = ["/bin/sh", "-c"]
-      args    = ["printf \"%s\" \"$CONF_YAML\" > /mnt/config/config.yaml && printf \"%s\" \"$CUSTOM_AUTH\" > /mnt/config/custom_auth.py"]
-
-      env {
-        name        = "CONF_YAML"
-        secret_name = "config-yaml"
-      }
-
-      env {
-        name        = "CUSTOM_AUTH"
-        secret_name = "custom-auth-py"
-      }
-
-      volume_mounts {
-        name = "config-volume"
-        path = "/mnt/config"
-      }
     }
 
     container {
@@ -167,8 +151,11 @@ resource "azurerm_container_app" "ca" {
       cpu    = 0.5
       memory = "1.0Gi"
 
-      command = ["litellm"]
-      args    = ["--config", "/app/config.yaml", "--port", "4000", "--host", "0.0.0.0"]
+      # Copy secrets to properly-named files in /app, then start LiteLLM.
+      # Replaces the former busybox init container, eliminating that image pull
+      # from the cold-start path.
+      command = ["/bin/sh", "-c"]
+      args    = ["cp /mnt/secrets/config-yaml /app/config.yaml && cp /mnt/secrets/custom-auth-py /app/custom_auth.py && exec litellm --config /app/config.yaml --port 4000 --host 0.0.0.0"]
 
       env {
         name        = "LITELLM_MASTER_KEY"
@@ -178,6 +165,18 @@ resource "azurerm_container_app" "ca" {
       env {
         name        = "API_KEYS"
         secret_name = "api-keys"
+      }
+
+      # Skip load_dotenv() filesystem scan on import
+      env {
+        name  = "LITELLM_MODE"
+        value = "PRODUCTION"
+      }
+
+      # Suppress debug logging; ERROR-only reduces startup and runtime log I/O
+      env {
+        name  = "LITELLM_LOG"
+        value = "ERROR"
       }
 
       # Shared API version for all Azure AI endpoints
@@ -201,6 +200,11 @@ resource "azurerm_container_app" "ca" {
           name        = "AZURE_AI_API_KEY_${upper(local.region_short[env.value])}"
           secret_name = "azure-ai-key-${local.region_short[env.value]}"
         }
+      }
+
+      volume_mounts {
+        name = "secrets-volume"
+        path = "/mnt/secrets"
       }
 
       volume_mounts {
