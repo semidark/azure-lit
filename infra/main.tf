@@ -168,7 +168,7 @@ resource "azurerm_container_app" "ca" {
       memory = "1.0Gi"
 
       command = ["litellm"]
-      args    = ["--config", "/app/config.yaml", "--port", "4000", "--host", "0.0.0.0", "--detailed_debug"]
+      args    = ["--config", "/app/config.yaml", "--port", "4000", "--host", "0.0.0.0"]
 
       env {
         name        = "LITELLM_MASTER_KEY"

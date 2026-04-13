@@ -1,33 +1,32 @@
-# Master Key Management
+# Key Management
 
 ## Overview
 
-For the PoC, LiteLLM Proxy is secured using a single MASTER_KEY. When a MASTER_KEY is configured (even without a database), client requests to the proxy MUST include this key in the Authorization header. Without a MASTER_KEY configured, the proxy is unauthenticated and will accept requests without credentials (suitable only for local development).
+Authentication is handled by `custom_auth.py`, which validates Bearer tokens against two sources:
 
-## Key Storage and Configuration
+- **Client API keys** — comma-separated list in `TF_VAR_api_keys` → `API_KEYS` env var
+- **Master key** — `TF_VAR_litellm_master_key` → `LITELLM_MASTER_KEY` env var
 
-- Store the MASTER_KEY as an Azure Container Apps secret (never in git).
-- Provide it to the container via environment variable `LITELLM_MASTER_KEY` or set `general_settings.master_key` in `config.yaml`.
-- The key should follow LiteLLM conventions and start with `sk-`.
+The master key is for admin/operator use. Client keys are distributed to API consumers.
+Neither needs to appear in the other's variable — the handler loads both independently.
 
-### Source of Truth (Local Dev / Terraform)
-- `infra/.env` contains `TF_VAR_litellm_master_key` used by Terraform to inject the Container Apps secret.
-- Ensure `.env` is in `.gitignore` and never committed.
+## Key Storage
+
+- Both are stored as Azure Container Apps secrets (never in git).
+- Source of truth: `infra/.env` (gitignored).
 
 ## Client Usage
 
-Include the MASTER_KEY in the Authorization header for all requests:
-
 ```bash
 curl -sS \
-  -H "Authorization: Bearer <MASTER_KEY>" \
+  -H "Authorization: Bearer <api_key>" \
   https://<your-container-app-host>/v1/models
 ```
 
-OpenAI SDK example:
+OpenAI SDK:
 ```python
 from openai import OpenAI
-client = OpenAI(api_key="<MASTER_KEY>", base_url="https://<your-container-app-host>")
+client = OpenAI(api_key="<api_key>", base_url="https://<your-container-app-host>")
 resp = client.chat.completions.create(
     model="gpt-4.1",
     messages=[{"role":"user","content":"hello"}],
@@ -35,42 +34,45 @@ resp = client.chat.completions.create(
 print(resp.choices[0].message.content)
 ```
 
-## Behavior Summary
+## Adding or Revoking Client Keys
 
-- MASTER_KEY set: authentication is enforced; requests without the correct key are rejected.
-- No MASTER_KEY set: no authentication; only acceptable for local/dev.
-- No database: single shared credential (MASTER_KEY); no per-user budgets/permissions; no Admin UI/virtual keys.
+1. Edit `infra/.env` — update `TF_VAR_api_keys` (comma-separated):
+   ```sh
+   TF_VAR_api_keys=sk-clientA,sk-clientB
+   ```
+2. Apply:
+   ```sh
+   cd infra && terraform apply -auto-approve
+   ```
+3. New Container App revision deploys. Old revision deactivated.
 
-## Rotation Procedure
+Generate a new key:
+```sh
+openssl rand -base64 32 | tr -d "=+/" | cut -c1-40 | sed 's/^/sk-/'
+```
 
-1. Generate a new secure key (example):
-   ```bash
+## Rotating the Master Key
+
+1. Generate a new key:
+   ```sh
    openssl rand -base64 48 | tr -d "=+/" | cut -c1-64 | sed 's/^/sk-/'
    ```
-2. Update `infra/.env` with the new value for `TF_VAR_litellm_master_key`.
-3. Apply infrastructure changes:
-   ```bash
-   cd infra
-   # With direnv: direnv allow
-   # Without direnv:
-   export $(grep -v '^#' .env | grep -v '^$' | xargs)
-   terraform apply -auto-approve
+2. Update `TF_VAR_litellm_master_key` in `infra/.env`.
+3. Apply:
+   ```sh
+   cd infra && terraform apply -auto-approve
    ```
-4. Verify clients are using the new key (update any stored credentials).
+
+## Behavior Summary
+
+- `custom_auth` replaces LiteLLM's built-in master key check entirely.
+- Keys are loaded from env vars on first request and cached for the process lifetime.
+- Key changes take effect only after redeploy (new Container App revision).
+- No DB, no virtual keys, no Admin UI.
 
 ## Security Notes
 
 - Use HTTPS only.
-- Limit access to the `.env` file and Azure resources.
-- Prefer Container Apps secrets for PoC; adopt Key Vault for provider secrets in MVP.
-- Do not log prompts/responses; metadata-only logging per project policy.
-
-## Moving Beyond PoC (Production Considerations)
-
-For multi-client scenarios and per-user budgets/permissions:
-- Enable a database and LiteLLM Virtual Keys to issue individual API keys.
-- Alternatively, integrate a custom key store (e.g., Azure Table Storage) and enforce keys via custom auth or service-layer middleware.
-
-References:
-- LiteLLM Proxy Master Key: general_settings.master_key / `LITELLM_MASTER_KEY`
-- LiteLLM Virtual Keys (multi-tenant): https://docs.litellm.ai/docs/proxy/virtual_keys
+- Restrict access to `infra/.env` and Azure resources.
+- Do not log prompts/responses — metadata-only logging per project policy.
+- All secrets encrypted at rest in Container Apps.
