@@ -2,7 +2,7 @@ terraform {
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
-      version = ">= 3.0.0"
+      version = ">= 4.55.0"
     }
     azapi = {
       source  = "Azure/azapi"
@@ -18,88 +18,34 @@ variable "subscription_id" {
 
 provider "azurerm" {
   subscription_id = var.subscription_id
-
   features {}
 }
 
 provider "azapi" {}
 
 variable "location" {
-  description = "The Azure region to deploy the resources in."
-  default     = "Germany West Central"
+  description = "Primary Azure region. Use lowercase-no-spaces to match model map region keys (e.g. germanywestcentral)."
+  default     = "germanywestcentral"
 }
 
 variable "resource_group_name" {
-  description = "The name of the resource group."
+  description = "Resource group name."
   default     = "AzureLIT-POC"
 }
 
-variable "ai_foundry_hub_name" {
-  description = "The name of the AI Foundry Hub."
-  default     = "AzureLIT-Hub"
-}
-
-variable "ai_foundry_project_name" {
-  description = "The name of the AI Foundry Project."
-  default     = "AzureLIT-Project"
-}
-
 variable "litellm_master_key" {
-  description = "Secure master key for LiteLLM authentication. Should be set via TF_VAR_litellm_master_key environment variable."
+  description = "Secure master key for LiteLLM. Set via TF_VAR_litellm_master_key."
   type        = string
   sensitive   = true
 }
 
+# =============================================================================
+# CORE INFRASTRUCTURE
+# =============================================================================
 
 resource "azurerm_resource_group" "rg" {
   name     = var.resource_group_name
   location = var.location
-}
-
-resource "random_string" "suffix" {
-  length  = 6
-  upper   = false
-  special = false
-}
-
-resource "azurerm_storage_account" "sa" {
-  name                     = "azurelitsapoc${random_string.suffix.result}"
-  resource_group_name      = azurerm_resource_group.rg.name
-  location                 = azurerm_resource_group.rg.location
-  account_tier             = "Standard"
-  account_replication_type = "LRS"
-}
-
-resource "azurerm_key_vault" "kv" {
-  name                = "AzureLIT-POC-KV"
-  location            = azurerm_resource_group.rg.location
-  resource_group_name = azurerm_resource_group.rg.name
-  tenant_id           = data.azurerm_client_config.current.tenant_id
-  sku_name            = "standard"
-}
-
-data "azurerm_client_config" "current" {}
-
-resource "azurerm_ai_foundry" "hub" {
-  name                = var.ai_foundry_hub_name
-  resource_group_name = azurerm_resource_group.rg.name
-  location            = azurerm_resource_group.rg.location
-  storage_account_id  = azurerm_storage_account.sa.id
-  key_vault_id        = azurerm_key_vault.kv.id
-
-  identity {
-    type = "SystemAssigned"
-  }
-}
-
-resource "azurerm_ai_foundry_project" "project" {
-  name               = var.ai_foundry_project_name
-  ai_services_hub_id = azurerm_ai_foundry.hub.id
-  location           = azurerm_resource_group.rg.location
-
-  identity {
-    type = "SystemAssigned"
-  }
 }
 
 resource "azurerm_log_analytics_workspace" "la" {
@@ -117,45 +63,59 @@ resource "azurerm_container_app_environment" "cae" {
   log_analytics_workspace_id = azurerm_log_analytics_workspace.la.id
 }
 
+# =============================================================================
+# LITELLM CONFIG (generated from model map)
+# =============================================================================
+
+locals {
+  config_yaml = templatefile("${path.module}/config.yaml.tpl", {
+    models       = var.models
+    region_short = local.region_short
+  })
+
+  # Flattened list of {env_key, secret_name, endpoint} per distinct region
+  # Used to build dynamic Container App secrets + env vars
+  distinct_regions = toset([for k, m in var.models : m.region])
+}
+
+# =============================================================================
+# LITELLM PROXY CONTAINER APP
+# =============================================================================
+
 resource "azurerm_container_app" "ca" {
   name                         = "litellm-proxy"
   container_app_environment_id = azurerm_container_app_environment.cae.id
   resource_group_name          = azurerm_resource_group.rg.name
   revision_mode                = "Single"
 
-  # Config source as secret (written by init container)
+  # LiteLLM config injected as secret
   secret {
     name  = "config-yaml"
-    value = file("${path.module}/config.yaml")
+    value = local.config_yaml
   }
 
-  # Inject Azure OpenAI key as a Container Apps secret
-  secret {
-    name  = "azure-openai-key"
-    value = azurerm_cognitive_account.openai.primary_access_key
-  }
-
-  # Secure master key for LiteLLM authentication
+  # Master key
   secret {
     name  = "litellm-master-key"
     value = var.litellm_master_key
   }
 
-  # Inject Azure AI Foundry project API key from Key Vault secret
-  secret {
-    name  = "azure-foundry-api-key"
-    value = azurerm_key_vault_secret.foundry_api_key.value
+  # One API key secret per distinct region
+  dynamic "secret" {
+    for_each = local.distinct_regions
+    content {
+      name  = "azure-ai-key-${local.region_short[secret.value]}"
+      value = local.account_keys[secret.value]
+    }
   }
 
   template {
-    # Shared volume for config
     volume {
       name         = "config-volume"
       storage_type = "EmptyDir"
     }
 
-    # TODO: Get rid of the init container since it slows down cold start
-    # Init container writes config.yaml content from secret to the shared volume
+    # TODO: Remove init container (cold start overhead)
     init_container {
       name   = "init-config"
       image  = "busybox:latest"
@@ -163,9 +123,7 @@ resource "azurerm_container_app" "ca" {
       memory = "1.0Gi"
 
       command = ["/bin/sh", "-c"]
-      args = [
-        "printf \"%s\" \"$CONF_YAML\" > /mnt/config/config.yaml"
-      ]
+      args    = ["printf \"%s\" \"$CONF_YAML\" > /mnt/config/config.yaml"]
 
       env {
         name        = "CONF_YAML"
@@ -178,7 +136,6 @@ resource "azurerm_container_app" "ca" {
       }
     }
 
-    # Main container mounts the same volume at /app and uses config.yaml
     container {
       name   = "litellm"
       image  = "ghcr.io/berriai/litellm:main-stable"
@@ -188,42 +145,32 @@ resource "azurerm_container_app" "ca" {
       command = ["litellm"]
       args    = ["--config", "/app/config.yaml", "--port", "4000", "--host", "0.0.0.0", "--detailed_debug"]
 
-      # Master key from Container Apps secret
       env {
         name        = "LITELLM_MASTER_KEY"
         secret_name = "litellm-master-key"
       }
 
-      # Azure OpenAI envs
+      # Shared API version for all Azure AI endpoints
       env {
-        name  = "AZURE_OPENAI_API_BASE"
-        value = "https://azurelit-openai.openai.azure.com"
-      }
-      env {
-        name  = "AZURE_OPENAI_API_VERSION"
+        name  = "AZURE_AI_API_VERSION"
         value = "2024-10-21"
       }
-      env {
-        name        = "AZURE_OPENAI_API_KEY"
-        secret_name = "azure-openai-key"
+
+      # One API_BASE + API_KEY env var per distinct region
+      dynamic "env" {
+        for_each = local.account_endpoints
+        content {
+          name  = "AZURE_AI_API_BASE_${upper(local.region_short[env.key])}"
+          value = env.value
+        }
       }
 
-      # Azure AI Foundry envs
-      env {
-        name  = "AZURE_FOUNDRY_API_BASE"
-        value = "https://${azurerm_ai_foundry.hub.name}.services.ai.azure.com"
-      }
-      env {
-        name  = "AZURE_FOUNDRY_PROJECT"
-        value = azurerm_ai_foundry_project.project.name
-      }
-      env {
-        name        = "AZURE_FOUNDRY_API_KEY"
-        secret_name = "azure-foundry-api-key"
-      }
-      env {
-        name  = "AZURE_FOUNDRY_API_VERSION"
-        value = "2024-05-01-preview"
+      dynamic "env" {
+        for_each = local.distinct_regions
+        content {
+          name        = "AZURE_AI_API_KEY_${upper(local.region_short[env.value])}"
+          secret_name = "azure-ai-key-${local.region_short[env.value]}"
+        }
       }
 
       volume_mounts {
@@ -241,27 +188,4 @@ resource "azurerm_container_app" "ca" {
       latest_revision = true
     }
   }
-}
-
-variable "foundry_api_key" {
-  description = "Azure AI Foundry API Key"
-  type        = string
-  sensitive   = true
-}
-
-resource "azurerm_key_vault_access_policy" "current" {
-  key_vault_id = azurerm_key_vault.kv.id
-  tenant_id    = data.azurerm_client_config.current.tenant_id
-  object_id    = data.azurerm_client_config.current.object_id
-
-  secret_permissions = [
-    "Get",
-    "List",
-    "Set",
-    "Delete",
-    "Recover",
-    "Backup",
-    "Restore",
-    "Purge"
-  ]
 }

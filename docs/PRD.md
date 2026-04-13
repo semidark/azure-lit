@@ -18,7 +18,7 @@
 - Observability:
   - Azure Monitor; no prompt/response content logging; metadata retention 90 days
 - Region:
-  - Sweden Central by default (configurable)
+    - Germany West Central by default (configurable)
 - CI/CD:
   - Terraform-based deployment
 

@@ -22,20 +22,22 @@ export $(grep -v '^#' infra/.env | grep -v '^$' | xargs)
 
 ---
 
-### Deployment Summary (PoC: Azure OpenAI + Azure AI Foundry)
+### Deployment Summary (PoC: Azure AI Foundry — New Foundry)
 
 This Terraform plan deploys a Proof-of-Concept (PoC) for the AzureLIT OpenAI-compatible gateway. The deployment creates the following resources in the configured region within the AzureLIT-POC resource group:
 
 1.  Azure Container App running the LiteLLM proxy with external HTTPS ingress.
-2.  Azure AI Foundry Hub and Project for model management.
-3.  Azure OpenAI resource + deployment for gpt-4.1.
-4.  Azure Storage Account and Azure Key Vault used by AI Foundry Hub.
+2.  Azure AIServices Cognitive Account (`kind = "AIServices"`) — unified Foundry resource serving both models.
+3.  Azure Foundry Project (`azurerm_cognitive_account_project`) — required to deploy `gpt-oss-120b`.
+4.  Model deployments: `gpt-4.1` (on the account) and `gpt-oss-120b` (on the project).
 5.  Log Analytics Workspace for observability.
 
 #### Model Routing
 
-- Azure OpenAI: `gpt-4.1` (via `azure/gpt-4.1` provider in config.yaml)
-- Azure AI Foundry: `gpt-oss-120b` (via `azure_ai/gpt-oss-120b` provider in config.yaml)
+Both models share the same AIServices account endpoint and API key:
+
+- `gpt-4.1` (via `azure/gpt-4.1` in config.yaml — standard deployment on account)
+- `gpt-oss-120b` (via `azure/gpt-oss-120b` in config.yaml — deployment on Foundry project)
 
 Clients choose by model name and use a single OpenAI-compatible surface on the LiteLLM proxy. Endpoints supported are `/v1/chat/completions` (streaming supported) and `/v1/models`.
 
@@ -61,11 +63,12 @@ Authorization: Bearer sk-<LITELLM_MASTER_KEY>
 #### Additional Hardening
 
 - `litellm_settings.drop_params: true` prevents clients from overriding provider credentials.
-- `forward_client_headers_to_llm_api: false`.
-- DB-related features disabled to keep the PoC DB-less (`store_model_in_db: false`, `disable_spend_logs: true`, `disable_spend_updates: true`, `disable_adding_master_key_hash_to_db: true`, `disable_reset_budget: true`, `allow_requests_on_db_unavailable: true`).
+- DB-related features disabled to keep the PoC DB-less (`store_model_in_db: false`, `disable_spend_logs: true`, `disable_spend_updates: true`, `disable_reset_budget: true`).
+- Several `general_settings` entries (`forward_client_headers_to_llm_api`, `disable_adding_master_key_hash_to_db`, `allow_requests_on_db_unavailable`) are commented out with a TODO — enable only after testing, as they have been observed to break auth.
 
 ### Notes
 
-- AzureRM provider does not currently expose a deployment resource for Azure AI Foundry Projects. As a PoC workaround, we inject Foundry project credentials and configure the LiteLLM proxy to route requests to the Foundry project endpoint directly.
-- If you need Terraform-managed Foundry deployments, use AzAPI with data-plane actions once official support is available, or perform manual deployment in the Foundry portal and reference the endpoint/key here.
+- Both models are fully Terraform-managed via `azurerm_cognitive_deployment` targeting `azurerm_cognitive_account_project.project.id`. No AzAPI workarounds or manual portal steps required.
+- `gpt-oss-120b` requires `model.format = "OpenAI-OSS"` and must be deployed into a Foundry project (not the root account). This is reflected in `openai.tf`.
+- Single API key (`azure-ai-key` Container Apps secret) covers both models — no separate Foundry key needed.
 - MVP will transition to FastAPI gateway using LiteLLM SDK, Table Storage-backed keys, and discovery poller.

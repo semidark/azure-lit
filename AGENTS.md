@@ -5,9 +5,9 @@ Planning + infra repo for an OpenAI-compatible LiteLLM gateway on Azure. No appl
 ## Repo Layout
 
 - `infra/` — Terraform root module (all IaC lives here; run commands from this dir)
-  - `main.tf` — Providers, variables, core resources (RG, Storage, Key Vault, AI Foundry, Container Apps)
-  - `openai.tf` — Azure OpenAI Cognitive Account + gpt-4.1 deployment
-  - `kv.tf` — Key Vault secret for Foundry API key (**placeholder value "REPLACE-ME"** — must be set manually before apply)
+  - `main.tf` — Providers, variables, core resources (RG, Log Analytics, Container Apps)
+  - `openai.tf` — Azure AIServices Cognitive Account (unified Foundry), Foundry project, gpt-4.1 + gpt-oss-120b deployments
+  - `kv.tf` — Comment-only file; Key Vault removed (no longer required by new Foundry)
   - `config.yaml` — LiteLLM Proxy config; injected into container at deploy time
   - `custom_auth.py` — Future custom auth handler (not wired in PoC)
   - `outputs.tf` — Container App FQDN and URL
@@ -43,10 +43,12 @@ terraform apply tfplan
 | `ai_foundry_hub_name` | `AzureLIT-Hub` |
 | `ai_foundry_project_name` | `AzureLIT-Project` |
 
+> Note: `ai_foundry_hub_name` and `ai_foundry_project_name` are legacy variables removed in the new Foundry migration. The project is now created as `azurerm_cognitive_account_project` in `openai.tf` without a separate variable.
+
 ### Providers
 
-- `azurerm` >= 3.0 (locked at 4.48.0)
-- `azapi` >= 2.0 (locked at 2.7.0)
+- `azurerm` >= 4.55.0 (locked at 4.68.0)
+- `azapi` >= 2.0 (locked at 2.9.0)
 - `random` (implicit)
 
 ## Architecture (PoC)
@@ -55,14 +57,13 @@ LiteLLM Proxy runs as a Container App with external HTTPS ingress on port 4000.
 
 - **Config injection**: An init container writes `config.yaml` from a Container Apps secret into an EmptyDir volume mounted at `/app`. Config changes require redeploy.
 - **Auth**: MASTER_KEY-only. Clients send `Authorization: Bearer <key>`. No DB, no virtual keys, no Admin UI.
-- **Models**: `gpt-4.1` (Azure OpenAI, `azure/` provider) and `gpt-oss-120b` (AI Foundry, `azure_ai/` provider).
+- **Models**: `gpt-4.1` (deployed on AIServices account, `azure/` provider) and `gpt-oss-120b` (deployed into Foundry project, also `azure/` provider — same endpoint).
 - **Container image**: `ghcr.io/berriai/litellm:main-stable`
 
 ## Secrets & Env
 
 - `.env` and `*.tfvars` are gitignored — never commit secrets.
-- Container Apps secrets: `config-yaml`, `azure-openai-key`, `litellm-master-key`, `azure-foundry-api-key`.
-- `kv.tf` has a placeholder secret value — replace before first apply or set manually in Key Vault after.
+- Container Apps secrets: `config-yaml`, `azure-ai-key`, `litellm-master-key`.
 
 ### Variable Injection for Terraform
 

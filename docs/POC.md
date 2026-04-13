@@ -1,33 +1,41 @@
 # Proof-of-Concept (PoC) — LiteLLM Proxy on Azure Container Apps
 
-Goal: Validate OpenAI-compatible API (including streaming) via LiteLLM Proxy, fronting Azure OpenAI deployments, with minimal infrastructure and a single shared credential.
+Goal: Validate OpenAI-compatible API (including streaming) via LiteLLM Proxy, fronting Azure AI Foundry model deployments, with minimal infrastructure and a single shared credential.
 
 ## Scope
 - OpenAI-compatible endpoints: `/v1/chat/completions` (streaming supported) and `/v1/models`
 - Static model list via `config.yaml` (no discovery)
 - External HTTPS ingress on Azure Container Apps
 - Authentication: MASTER_KEY-only (no database, no virtual keys)
-- Minimal secrets footprint (Container Apps secrets; no Key Vault in PoC unless required)
-- Region default: Sweden Central
+- Minimal secrets footprint (Container Apps secrets; no Key Vault in PoC)
+- Region default: Germany West Central
 
 ## Architecture
-- Azure Container App runs the official LiteLLM Proxy image (`ghcr.io/berriai/litellm:main-latest`)
-- `config.yaml` defines `model_list` entries that point to Azure OpenAI deployments
-- Environment variables provide provider credentials (e.g., `AZURE_API_BASE`, `AZURE_API_KEY`, `AZURE_API_VERSION`)
+- Azure Container App runs the official LiteLLM Proxy image (`ghcr.io/berriai/litellm:main-stable`)
+- Single Azure AIServices Cognitive Account (`kind = "AIServices"`) hosts both model deployments
+- `gpt-4.1` deployed directly on the account; `gpt-oss-120b` deployed into a Foundry project (`azurerm_cognitive_account_project`)
+- `config.yaml` defines `model_list` entries pointing to the unified AIServices endpoint
+- Environment variables provide provider credentials (`AZURE_AI_API_BASE`, `AZURE_AI_API_KEY`, `AZURE_AI_API_VERSION`)
 - Logs to Log Analytics via Container Apps
 
 ## Configuration — Models (config.yaml)
-Example entry:
+Both models share the same AIServices endpoint and key:
 ```yaml
 model_list:
-  - model_name: gpt-4o-mini
+  - model_name: gpt-4.1
     litellm_params:
-      model: azure/<your_azure_deployment_name>
-      api_base: os.environ/AZURE_API_BASE
-      api_key: os.environ/AZURE_API_KEY
-      api_version: os.environ/AZURE_API_VERSION
+      model: azure/gpt-4.1
+      api_base: os.environ/AZURE_AI_API_BASE
+      api_key: os.environ/AZURE_AI_API_KEY
+      api_version: os.environ/AZURE_AI_API_VERSION
+  - model_name: gpt-oss-120b
+    litellm_params:
+      model: azure/gpt-oss-120b
+      api_base: os.environ/AZURE_AI_API_BASE
+      api_key: os.environ/AZURE_AI_API_KEY
+      api_version: os.environ/AZURE_AI_API_VERSION
 ```
-Define multiple models as needed; clients select by `model_name`.
+Clients select by `model_name`. Add further models as needed by adding deployments in `openai.tf` and entries here.
 
 ## Authentication — MASTER_KEY Only
 - Set a single MASTER_KEY for the proxy via either:
@@ -78,10 +86,12 @@ curl -sS \
 
 ## Terraform (Overview)
 - Resource Group, Log Analytics Workspace, Container Apps Environment (external ingress)
+- Azure AIServices Cognitive Account (`kind = "AIServices"`, `project_management_enabled = true`)
+- Foundry Project (`azurerm_cognitive_account_project`) + model deployments (`azurerm_cognitive_deployment`)
 - Container App:
-  - Image: LiteLLM Proxy
+  - Image: LiteLLM Proxy (`ghcr.io/berriai/litellm:main-stable`)
   - Target port: 4000
-  - Env: `AZURE_API_BASE`, `AZURE_API_KEY` (secret), `AZURE_API_VERSION`, `LITELLM_MASTER_KEY` (secret)
+  - Env: `AZURE_AI_API_BASE`, `AZURE_AI_API_KEY` (secret), `AZURE_AI_API_VERSION`, `AZURE_FOUNDRY_PROJECT`, `LITELLM_MASTER_KEY` (secret)
   - `config.yaml` injection via secret + init container to mount file into `/app/config.yaml`
 
 ## Security
