@@ -11,7 +11,7 @@ Goal: Validate OpenAI-compatible API (including streaming) via LiteLLM Proxy, fr
 - Region default: Germany West Central
 
 ## Architecture
-- Azure Container App runs the official LiteLLM Proxy image (`ghcr.io/berriai/litellm:main-stable`)
+- Azure Container App runs the official LiteLLM Proxy image (`ghcr.io/berriai/litellm:main-v1.82.3`, pinned)
 - Single Azure AIServices Cognitive Account (`kind = "AIServices"`) hosts all model deployments
 - All models deployed directly on the account (`project = false` by default); Foundry project exists for models that require it (`project = true`)
 - `config.yaml` and `custom_auth.py` are rendered/read by Terraform and injected as Container Apps secrets
@@ -114,16 +114,22 @@ curl -sS \
 
 ## Security
 - Store all secrets as Container Apps secrets; never commit to git
-- Use HTTPS only
+- HTTPS only enforced (`allow_insecure_connections = false`)
 - `litellm_settings.drop_params: true` prevents clients overriding provider credentials
+- Admin UI disabled (`disable_admin_ui: true`)
+- Key management routes disabled (`disable_key_management: true`)
+- Container image pinned to `main-v1.82.3` — no floating tag surprises
+- Scale-to-zero (`min_replicas = 0`, `max_replicas = 1`) limits blast radius of abuse
 
 ## Limitations
 - No dynamic model discovery; redeploy to change `model_list`
 - No per-key model restrictions (all keys access all models)
 - No spend tracking per key
 - Key rotation requires `terraform apply`
+- `/ui` login page is still reachable — `disable_admin_ui: true` only blocks post-login UI routes, not the login page itself. Azure Container Apps ingress (managed Envoy) exposes IP restrictions only — no path-based blocking. See next steps for the fix.
 
 ## Next Steps
 - Per-key model access restrictions (extend `custom_auth.py`)
 - Spend tracking / rate limiting (Azure Table Storage counters)
 - Telemetry to Azure Monitor (latency, errors, token counts)
+- **Block `/ui` completely via nginx sidecar**: add an nginx container to the same Container App that proxies all traffic to LiteLLM on `localhost:4000` and returns `404` on `/ui*`. Change ingress `target_port` from `4000` to `80`. Zero extra cost — nginx handles path-blocking before requests reach LiteLLM. Alternative (paid): Azure Front Door WAF with a path-based custom rule.

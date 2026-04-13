@@ -314,11 +314,6 @@ output "openai_endpoint" {
   value = azurerm_cognitive_account.openai.endpoint
 }
 
-output "openai_primary_key" {
-  value     = azurerm_cognitive_account.openai.primary_access_key
-  sensitive = true
-}
-
 output "regional_endpoints" {
   description = "Endpoints for all regional Cognitive Accounts"
   value = {

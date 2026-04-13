@@ -130,6 +130,9 @@ resource "azurerm_container_app" "ca" {
   }
 
   template {
+    min_replicas = 0
+    max_replicas = 1
+
     # Secret volume: all Container App secrets are mounted as files.
     # Only config-yaml and custom-auth-py are used; the rest are harmless extras.
     volume {
@@ -147,7 +150,7 @@ resource "azurerm_container_app" "ca" {
 
     container {
       name   = "litellm"
-      image  = "ghcr.io/berriai/litellm:main-stable"
+      image  = "ghcr.io/berriai/litellm:main-v1.82.3"
       cpu    = 0.5
       memory = "1.0Gi"
 
@@ -215,8 +218,9 @@ resource "azurerm_container_app" "ca" {
   }
 
   ingress {
-    external_enabled = true
-    target_port      = 4000
+    external_enabled           = true
+    target_port                = 4000
+    allow_insecure_connections = false
     traffic_weight {
       percentage      = 100
       latest_revision = true
