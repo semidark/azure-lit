@@ -23,8 +23,10 @@ general_settings:
   disable_spend_updates: true
   disable_reset_budget: true
 
-  ## TODO: Check these — enabling breaks auth
-  # forward_client_headers_to_llm_api: false
-  # disable_adding_master_key_hash_to_db: true
-  # allow_requests_on_db_unavailable: true
-  # timeout: 60
+  # Prevent master key hash write attempts against non-existent DB
+  disable_adding_master_key_hash_to_db: true
+  # Allow requests if LiteLLM probes for a DB and finds none
+  allow_requests_on_db_unavailable: true
+  # forward_client_headers_to_llm_api omitted — default (false/None) is correct;
+  # proxy Authorization header is never forwarded to upstream regardless.
+  # timeout omitted — let provider defaults apply; reasoning models can exceed 60s.
