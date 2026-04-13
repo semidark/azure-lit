@@ -148,16 +148,24 @@ print(response.choices[0].message.content)
 
 ## Architecture
 
-```
-┌─────────────────┐     ┌─────────────────────┐     ┌─────────────────────┐
-│   Client/SDK    │────▶│  Azure Container    │────▶│   Azure OpenAI      │
-│  (OpenAI fmt)   │     │  Apps (LiteLLM)     │     │   (gpt-4.1)         │
-└─────────────────┘     └─────────────────────┘     └─────────────────────┘
-                               │
-                               └────────────────────▶┌─────────────────────┐
-                                                     │  Azure AI Foundry   │
-                                                     │  (gpt-oss-120b)     │
-                                                     └─────────────────────┘
+```mermaid
+graph LR
+    Client["Client / SDK<br/>(OpenAI format)"] -->|Bearer sk-...| LiteLLM
+
+    subgraph Azure Container Apps
+        LiteLLM["LiteLLM Proxy<br/>:4000"]
+    end
+
+    LiteLLM -->|azure/gpt-4.1| OpenAI["Azure OpenAI<br/>gpt-4.1"]
+    LiteLLM -->|azure_ai/gpt-oss-120b| Foundry["Azure AI Foundry<br/>gpt-oss-120b"]
+
+    subgraph Supporting Services
+        KV["Key Vault<br/>Provider Secrets"]
+        LA["Log Analytics<br/>Metadata Logging"]
+    end
+
+    LiteLLM -.-> KV
+    LiteLLM -.-> LA
 ```
 
 ### Components
