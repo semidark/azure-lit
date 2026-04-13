@@ -18,6 +18,8 @@
 # See: https://github.com/hashicorp/terraform-provider-azurerm/issues/28653
 # =============================================================================
 
+# --- Primary account policy ---
+
 resource "azurerm_cognitive_account_rai_policy" "permissive" {
   name                 = "AzureLIT-Permissive"
   cognitive_account_id = azurerm_cognitive_account.openai.id
@@ -84,6 +86,96 @@ resource "azurerm_cognitive_account_rai_policy" "permissive" {
 
   # Jailbreak + Protected Material: fully disabled
   # severity_threshold required by provider but ignored for these filter types
+  content_filter {
+    name               = "Jailbreak"
+    source             = "Prompt"
+    severity_threshold = "High"
+    filter_enabled     = false
+    block_enabled      = false
+  }
+  content_filter {
+    name               = "Protected Material Text"
+    source             = "Completion"
+    severity_threshold = "High"
+    filter_enabled     = false
+    block_enabled      = false
+  }
+  content_filter {
+    name               = "Protected Material Code"
+    source             = "Completion"
+    severity_threshold = "High"
+    filter_enabled     = false
+    block_enabled      = false
+  }
+}
+
+# --- Regional account policies (identical to primary) ---
+
+resource "azurerm_cognitive_account_rai_policy" "permissive_regional" {
+  for_each = local.remote_regions
+
+  name                 = "AzureLIT-Permissive"
+  cognitive_account_id = azurerm_cognitive_account.regional[each.key].id
+  base_policy_name     = "Microsoft.DefaultV2"
+  mode                 = "Blocking"
+
+  content_filter {
+    name               = "Hate"
+    source             = "Prompt"
+    severity_threshold = "High"
+    filter_enabled     = true
+    block_enabled      = true
+  }
+  content_filter {
+    name               = "Hate"
+    source             = "Completion"
+    severity_threshold = "High"
+    filter_enabled     = true
+    block_enabled      = true
+  }
+  content_filter {
+    name               = "Sexual"
+    source             = "Prompt"
+    severity_threshold = "High"
+    filter_enabled     = true
+    block_enabled      = true
+  }
+  content_filter {
+    name               = "Sexual"
+    source             = "Completion"
+    severity_threshold = "High"
+    filter_enabled     = true
+    block_enabled      = true
+  }
+  content_filter {
+    name               = "Violence"
+    source             = "Prompt"
+    severity_threshold = "High"
+    filter_enabled     = true
+    block_enabled      = true
+  }
+  content_filter {
+    name               = "Violence"
+    source             = "Completion"
+    severity_threshold = "High"
+    filter_enabled     = true
+    block_enabled      = true
+  }
+  content_filter {
+    name               = "Selfharm"
+    source             = "Prompt"
+    severity_threshold = "High"
+    filter_enabled     = true
+    block_enabled      = true
+  }
+  content_filter {
+    name               = "Selfharm"
+    source             = "Completion"
+    severity_threshold = "High"
+    filter_enabled     = true
+    block_enabled      = true
+  }
+
   content_filter {
     name               = "Jailbreak"
     source             = "Prompt"

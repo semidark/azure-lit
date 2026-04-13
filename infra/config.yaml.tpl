@@ -3,12 +3,24 @@
 
 model_list:
 %{ for name, model in models ~}
+%{ if model.responses_only ~}
+  # Responses-only model (e.g. codex) — uses /v1/preview endpoint via azure/responses/ prefix
   - model_name: ${name}
+    litellm_params:
+      model: azure/responses/${name}
+      api_base: os.environ/AZURE_AI_API_BASE_${upper(region_short[model.region])}
+      api_key: os.environ/AZURE_AI_API_KEY_${upper(region_short[model.region])}
+      api_version: preview
+%{ else ~}
+  - model_name: ${name}
+    model_info:
+      mode: chat
     litellm_params:
       model: azure/${name}
       api_base: os.environ/AZURE_AI_API_BASE_${upper(region_short[model.region])}
       api_key: os.environ/AZURE_AI_API_KEY_${upper(region_short[model.region])}
       api_version: os.environ/AZURE_AI_API_VERSION
+%{ endif ~}
 %{ endfor ~}
 
 # Prevent clients from overriding sensitive provider fields at request-time

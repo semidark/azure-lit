@@ -5,25 +5,29 @@
 # LiteLLM config wiring automatically.
 #
 # Fields:
-#   format   - "OpenAI" | "OpenAI-OSS"
-#   version  - pinned model version string
-#   sku      - "DataZoneStandard" | "GlobalStandard" | "ProvisionedManaged"
-#   capacity - TPM capacity units (varies by model/sku)
-#   region   - Azure region. Use var.location for primary. Other regions
-#              trigger a new Cognitive Account in that region automatically.
-#   project  - true = deploy into Foundry project (required by some models
-#              e.g. gpt-oss-120b). false = deploy directly on account.
+#   format         - "OpenAI" | "OpenAI-OSS"
+#   version        - pinned model version string
+#   sku            - "DataZoneStandard" | "GlobalStandard" | "ProvisionedManaged"
+#   capacity       - TPM capacity units (varies by model/sku)
+#   region         - Azure region. Use var.location for primary. Other regions
+#                    trigger a new Cognitive Account in that region automatically.
+#   project        - true = deploy into Foundry project (required by some models
+#                    e.g. gpt-oss-120b). false = deploy directly on account.
+#   responses_only - true = model only supports the Responses API (e.g. codex
+#                    models). LiteLLM config uses azure/responses/ prefix and
+#                    api_version=preview. false = standard chat completions.
 # =============================================================================
 
 variable "models" {
   description = "Map of model deployments. Key becomes the deployment name and LiteLLM model alias."
   type = map(object({
-    format   = string
-    version  = string
-    sku      = string
-    capacity = number
-    region   = string
-    project  = optional(bool, false)
+    format         = string
+    version        = string
+    sku            = string
+    capacity       = number
+    region         = string
+    project        = optional(bool, false)
+    responses_only = optional(bool, false)
   }))
 
   default = {
@@ -58,6 +62,23 @@ variable "models" {
       capacity = 1
       region   = "germanywestcentral"
       project  = false
+    }
+    "gpt-5.4" = {
+      format   = "OpenAI"
+      version  = "2026-03-05"
+      sku      = "GlobalStandard"
+      capacity = 1000
+      region   = "germanywestcentral"
+      project  = false
+    }
+    "gpt-5.3-codex" = {
+      format         = "OpenAI"
+      version        = "2026-02-24"
+      sku            = "GlobalStandard"
+      capacity       = 1000
+      region         = "swedencentral"
+      project        = false
+      responses_only = true
     }
   }
 }
@@ -242,14 +263,12 @@ resource "azapi_resource" "primary_project" {
 }
 
 # Remote accounts, account-scoped
-# Note: rai_policy_name here references a policy on the remote account.
-# Remote accounts don't have the permissive policy — they get the default.
-# TODO: create permissive policy on each regional account if needed.
 resource "azurerm_cognitive_deployment" "remote_account" {
   for_each = local.remote_account_models
 
   name                 = each.key
   cognitive_account_id = azurerm_cognitive_account.regional[each.value.region].id
+  rai_policy_name      = azurerm_cognitive_account_rai_policy.permissive_regional[each.value.region].name
 
   model {
     format  = each.value.format
