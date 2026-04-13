@@ -1,3 +1,27 @@
+### Local Environment Setup
+
+Variables are stored in `infra/.env` (gitignored). Use **direnv** to auto-export them on directory entry — install it, add the shell hook, then run `direnv allow`:
+
+```sh
+# 1. Install (example for bash)
+sudo pacman -S direnv   # or apt install / brew install
+
+# 2. Add hook to ~/.bashrc (or ~/.zshrc), then restart shell
+eval "$(direnv hook bash)"
+
+# 3. Create env file and allow
+cp infra/example.env infra/.env  # fill in values
+direnv allow
+```
+
+**Without direnv**, export manually before each session:
+
+```sh
+export $(grep -v '^#' infra/.env | grep -v '^$' | xargs)
+```
+
+---
+
 ### Deployment Summary (PoC: Azure OpenAI + Azure AI Foundry)
 
 This Terraform plan deploys a Proof-of-Concept (PoC) for the AzureLIT OpenAI-compatible gateway. The deployment creates the following resources in the configured region within the AzureLIT-POC resource group:

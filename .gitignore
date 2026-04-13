@@ -36,6 +36,7 @@ terraform.rc
 .env
 infra/.env
 
+
 infra/tfplan
 infra/.env.bak
 infra/.terraform.lock.hcl

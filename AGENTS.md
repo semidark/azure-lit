@@ -64,6 +64,17 @@ LiteLLM Proxy runs as a Container App with external HTTPS ingress on port 4000.
 - Container Apps secrets: `config-yaml`, `azure-openai-key`, `litellm-master-key`, `azure-foundry-api-key`.
 - `kv.tf` has a placeholder secret value — replace before first apply or set manually in Key Vault after.
 
+### Variable Injection for Terraform
+
+`TF_VAR_*` variables are stored in `infra/.env` (gitignored). The repo uses **direnv** to auto-export them on directory entry — install it, hook it into your shell (`eval "$(direnv hook bash)"`), then run `direnv allow`. **The shell hook is required; installing direnv alone is not enough.**
+
+Without direnv, export manually before each session:
+```sh
+export $(grep -v '^#' infra/.env | grep -v '^$' | xargs)
+```
+
+Full setup in `docs/DEPLOYMENT_SUMMARY.md`.
+
 ## Gotchas
 
 - `config.yaml` changes only take effect on redeploy (no hot reload).
