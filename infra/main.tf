@@ -130,8 +130,9 @@ resource "azurerm_container_app" "ca" {
   }
 
   template {
-    min_replicas = 0
-    max_replicas = 1
+    min_replicas               = 0
+    max_replicas               = 1
+    cooldown_period_in_seconds = 600
 
     # Secret volume: all Container App secrets are mounted as files.
     # Only config-yaml and custom-auth-py are used; the rest are harmless extras.

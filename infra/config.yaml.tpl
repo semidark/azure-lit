@@ -26,6 +26,7 @@ model_list:
 # Prevent clients from overriding sensitive provider fields at request-time
 litellm_settings:
   drop_params: true
+  drop_unknown_params: true
   set_verbose: false
   json_logs: true
 
