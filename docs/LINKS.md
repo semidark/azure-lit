@@ -8,6 +8,7 @@ Here’s a curated list of relevant links for your project, spanning LiteLLM, Az
 - LiteLLM Proxy Getting Started: https://docs.litellm.ai/docs/proxy/getting_started
 - LiteLLM Model Metadata Database: https://models.litellm.ai/
 - How are the rules defined in LiteLLM: https://deepwiki.com/search/where-are-the-rules-defined-fo_d05c5467-bcf0-4dde-a1d7-c627f849baa2
+- Load balancing OpenAI API calls with LiteLLM: https://baeke.info/2024/04/16/load-balancing-openai-api-calls-with-litellm/
 
 ### Azure AI Foundry
 - Azure AI Foundry Overview: https://ai.azure.com/doc/
@@ -28,6 +29,8 @@ Here’s a curated list of relevant links for your project, spanning LiteLLM, Az
 - Azure Monitor (Telemetry): https://learn.microsoft.com/en-us/azure/azure-monitor/
 - Azure Pipelines for CI/CD: https://learn.microsoft.com/en-us/azure/devops/pipelines/
 - Terraform Azure Provider: https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs
+- Use Terraform to manage Azure AI Foundry resources: https://learn.microsoft.com/en-us/azure/ai-foundry/how-to/create-resource-terraform?tabs=azapi
+- Overview of the Terraform AzAPI provider: https://learn.microsoft.com/en-us/azure/developer/terraform/overview-azapi-provider
 
 ### General AI/LLM and Streaming
 - OpenAI API Streaming Docs: https://platform.openai.com/docs/guides/streaming-responses

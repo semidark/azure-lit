@@ -1,16 +1,16 @@
 resource "azurerm_cognitive_account" "openai" {
-  name                = "azurelit-openai"
-  location            = azurerm_resource_group.rg.location
-  resource_group_name = azurerm_resource_group.rg.name
-  kind                = "OpenAI"
-  sku_name            = "S0"
+  name                  = "azurelit-openai"
+  location              = azurerm_resource_group.rg.location
+  resource_group_name   = azurerm_resource_group.rg.name
+  kind                  = "OpenAI"
+  sku_name              = "S0"
   custom_subdomain_name = "azurelit-openai"
 
   identity { type = "SystemAssigned" }
 
-  public_network_access_enabled       = true
-  local_auth_enabled                  = true
-  outbound_network_access_restricted  = false
+  public_network_access_enabled      = true
+  local_auth_enabled                 = true
+  outbound_network_access_restricted = false
 }
 
 resource "azurerm_cognitive_deployment" "gpt41" {
@@ -24,8 +24,8 @@ resource "azurerm_cognitive_deployment" "gpt41" {
   }
 
   sku {
-    name     = "GlobalStandard"
-    capacity = 1
+    name     = "DataZoneStandard"
+    capacity = 50
   }
 }
 

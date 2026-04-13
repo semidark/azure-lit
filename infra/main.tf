@@ -4,14 +4,25 @@ terraform {
       source  = "hashicorp/azurerm"
       version = ">= 3.0.0"
     }
+    azapi = {
+      source  = "Azure/azapi"
+      version = ">= 2.0.0"
+    }
   }
 }
 
+variable "subscription_id" {
+  description = "Azure subscription ID. Set via TF_VAR_subscription_id or a .tfvars file."
+  type        = string
+}
+
 provider "azurerm" {
-  subscription_id = "b6548f5c-d425-4e5c-bfb2-296186a152ee"
+  subscription_id = var.subscription_id
 
   features {}
 }
+
+provider "azapi" {}
 
 variable "location" {
   description = "The Azure region to deploy the resources in."
@@ -38,6 +49,7 @@ variable "litellm_master_key" {
   type        = string
   sensitive   = true
 }
+
 
 resource "azurerm_resource_group" "rg" {
   name     = var.resource_group_name
@@ -129,6 +141,12 @@ resource "azurerm_container_app" "ca" {
     value = var.litellm_master_key
   }
 
+  # Inject Azure AI Foundry project API key from Key Vault secret
+  secret {
+    name  = "azure-foundry-api-key"
+    value = azurerm_key_vault_secret.foundry_api_key.value
+  }
+
   template {
     # Shared volume for config
     volume {
@@ -141,11 +159,11 @@ resource "azurerm_container_app" "ca" {
     init_container {
       name   = "init-config"
       image  = "busybox:latest"
-      cpu    = 0.25
-      memory = "0.5Gi"
+      cpu    = 0.5
+      memory = "1.0Gi"
 
       command = ["/bin/sh", "-c"]
-      args    = [
+      args = [
         "printf \"%s\" \"$CONF_YAML\" > /mnt/config/config.yaml"
       ]
 
@@ -164,11 +182,11 @@ resource "azurerm_container_app" "ca" {
     container {
       name   = "litellm"
       image  = "ghcr.io/berriai/litellm:main-stable"
-      cpu    = 0.25
-      memory = "0.5Gi"
+      cpu    = 0.5
+      memory = "1.0Gi"
 
       command = ["litellm"]
-      args = ["--config", "/app/config.yaml", "--port", "4000", "--host", "0.0.0.0", "--detailed_debug"]
+      args    = ["--config", "/app/config.yaml", "--port", "4000", "--host", "0.0.0.0", "--detailed_debug"]
 
       # Master key from Container Apps secret
       env {
@@ -190,6 +208,24 @@ resource "azurerm_container_app" "ca" {
         secret_name = "azure-openai-key"
       }
 
+      # Azure AI Foundry envs
+      env {
+        name  = "AZURE_FOUNDRY_API_BASE"
+        value = "https://${azurerm_ai_foundry.hub.name}.services.ai.azure.com"
+      }
+      env {
+        name  = "AZURE_FOUNDRY_PROJECT"
+        value = azurerm_ai_foundry_project.project.name
+      }
+      env {
+        name        = "AZURE_FOUNDRY_API_KEY"
+        secret_name = "azure-foundry-api-key"
+      }
+      env {
+        name  = "AZURE_FOUNDRY_API_VERSION"
+        value = "2024-05-01-preview"
+      }
+
       volume_mounts {
         name = "config-volume"
         path = "/app"
@@ -205,4 +241,27 @@ resource "azurerm_container_app" "ca" {
       latest_revision = true
     }
   }
+}
+
+variable "foundry_api_key" {
+  description = "Azure AI Foundry API Key"
+  type        = string
+  sensitive   = true
+}
+
+resource "azurerm_key_vault_access_policy" "current" {
+  key_vault_id = azurerm_key_vault.kv.id
+  tenant_id    = data.azurerm_client_config.current.tenant_id
+  object_id    = data.azurerm_client_config.current.object_id
+
+  secret_permissions = [
+    "Get",
+    "List",
+    "Set",
+    "Delete",
+    "Recover",
+    "Backup",
+    "Restore",
+    "Purge"
+  ]
 }

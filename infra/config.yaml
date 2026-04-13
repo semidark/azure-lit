@@ -8,6 +8,14 @@ model_list:
       api_base: os.environ/AZURE_OPENAI_API_BASE
       api_key: os.environ/AZURE_OPENAI_API_KEY
       api_version: os.environ/AZURE_OPENAI_API_VERSION
+  # Azure AI Foundry (azure_ai provider) - gpt-oss-120b
+  - model_name: gpt-oss-120b
+    litellm_params:
+      model: azure_ai/gpt-oss-120b
+      api_base: os.environ/AZURE_FOUNDRY_API_BASE
+      project: os.environ/AZURE_FOUNDRY_PROJECT
+      api_key: os.environ/AZURE_FOUNDRY_API_KEY
+      api_version: os.environ/AZURE_FOUNDRY_API_VERSION
 
 # Prevent clients from overriding sensitive provider fields at request-time
 litellm_settings:
