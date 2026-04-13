@@ -1,10 +1,10 @@
 # AzureLIT
 
-An OpenAI-compatible LLM gateway powered by [LiteLLM](https://github.com/BerriAI/litellm), running on Azure Container Apps. Unifies Azure OpenAI and Azure AI Foundry serverless endpoints behind a single, standardized API.
+An OpenAI-compatible LLM gateway powered by [LiteLLM](https://github.com/BerriAI/litellm), running on Azure Container Apps. Unifies Azure AI Foundry model deployments behind a single, standardized API.
 
 ## Overview
 
-AzureLIT provides a lightweight, cost-conscious HTTP gateway that exposes Azure OpenAI and Azure AI Foundry models through an OpenAI-compatible interface. It supports streaming chat completions, automatic model discovery, and minimal operational overhead.
+AzureLIT provides a lightweight, cost-conscious HTTP gateway that exposes Azure AI Foundry models through an OpenAI-compatible interface. It supports streaming chat completions and minimal operational overhead.
 
 **Current State:** Proof-of-Concept (PoC) with LiteLLM Proxy
 
@@ -13,7 +13,7 @@ AzureLIT provides a lightweight, cost-conscious HTTP gateway that exposes Azure 
 - **OpenAI-Compatible API**: Drop-in replacement for OpenAI SDK clients
   - `POST /v1/chat/completions` with streaming support
   - `GET /v1/models` for model discovery
-- **Multi-Provider Support**: Route to Azure OpenAI and Azure AI Foundry models
+- **Multi-Model Support**: Declarative `var.models` map — add a model with one Terraform map entry
 - **Authentication**: MASTER_KEY-only authentication (PoC); per-user virtual keys planned for MVP
 - **Infrastructure as Code**: Fully automated deployment via Terraform
 - **Observability**: Azure Monitor integration with metadata-only logging (no prompt/response content)
@@ -25,6 +25,7 @@ AzureLIT provides a lightweight, cost-conscious HTTP gateway that exposes Azure 
 - Azure subscription
 - Terraform >= 1.0
 - Azure CLI (for authentication)
+- direnv (recommended for secret injection)
 
 ### Configuration
 
@@ -44,14 +45,15 @@ TF_VAR_subscription_id=your-subscription-id
 # Required - Master key for client authentication (must start with 'sk-')
 TF_VAR_litellm_master_key=sk-your-secure-master-key
 
-# Azure AI Foundry credentials (for gpt-oss-120b model)
-TF_VAR_foundry_project=your-project-name
-TF_VAR_foundry_api_key=your-foundry-api-key
-TF_VAR_foundry_api_version=2024-05-01-preview
-
 # Optional - Override defaults
-TF_VAR_location=swedencentral
+TF_VAR_location=germanywestcentral
 TF_VAR_resource_group_name=AzureLIT-POC
+```
+
+3. Load the env vars (with direnv: `direnv allow`; without:)
+
+```bash
+export $(grep -v '^#' .env | grep -v '^$' | xargs)
 ```
 
 ### Deploy
@@ -66,8 +68,8 @@ terraform apply tfplan
 After deployment, Terraform outputs the container app URL:
 
 ```
-container_app_fqdn = "azurelit-poc-container-app.<region>.azurecontainerapps.io"
-container_app_url  = "https://azurelit-poc-container-app.<region>.azurecontainerapps.io"
+container_app_fqdn = "litellm-proxy.<env>.<region>.azurecontainerapps.io"
+container_app_url  = "https://litellm-proxy.<env>.<region>.azurecontainerapps.io"
 ```
 
 ### Test the Deployment
@@ -76,6 +78,11 @@ container_app_url  = "https://azurelit-poc-container-app.<region>.azurecontainer
 # Set your deployed URL and master key
 ENDPOINT="https://<your-container-app-fqdn>"
 MASTER_KEY="sk-your-master-key"
+
+# List available models
+curl -sS \
+  -H "Authorization: Bearer $MASTER_KEY" \
+  "$ENDPOINT/v1/models"
 
 # Test chat completion
 curl -sS \
@@ -93,16 +100,11 @@ curl -sS \
   -H "Authorization: Bearer $MASTER_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "gpt-4.1",
+    "model": "grok-4-20-reasoning",
     "messages": [{"role": "user", "content": "Count to 5"}],
     "stream": true
   }' \
   "$ENDPOINT/v1/chat/completions"
-
-# List available models
-curl -sS \
-  -H "Authorization: Bearer $MASTER_KEY" \
-  "$ENDPOINT/v1/models"
 ```
 
 ### Using with OpenAI SDK
@@ -129,11 +131,11 @@ print(response.choices[0].message.content)
 ```
 .
 ├── infra/                    # Terraform infrastructure
-│   ├── main.tf              # Core resources (RG, Storage, Key Vault, Container Apps)
-│   ├── openai.tf            # Azure OpenAI Cognitive Account + gpt-4.1 deployment
-│   ├── kv.tf                # Key Vault secrets
-│   ├── config.yaml          # LiteLLM Proxy configuration
-│   ├── outputs.tf           # Deployment outputs (FQDN, URL)
+│   ├── main.tf              # Core resources (RG, Log Analytics, Container Apps)
+│   ├── openai.tf            # var.models map, AIServices account, Foundry project, deployments
+│   ├── kv.tf                # Comment-only; Key Vault removed in new Foundry
+│   ├── config.yaml.tpl      # LiteLLM Proxy config template (rendered by Terraform)
+│   ├── outputs.tf           # Deployment outputs (FQDN, URL, endpoints)
 │   ├── example.env          # Example environment variables
 │   └── .env                 # Your secrets (gitignored)
 ├── docs/                     # Design and operational documentation
@@ -156,32 +158,42 @@ graph LR
         LiteLLM["LiteLLM Proxy<br/>:4000"]
     end
 
-    LiteLLM -->|azure/gpt-4.1| OpenAI["Azure OpenAI<br/>gpt-4.1"]
-    LiteLLM -->|azure_ai/gpt-oss-120b| Foundry["Azure AI Foundry<br/>gpt-oss-120b"]
+    subgraph Azure AIServices Account - germanywestcentral
+        GPT41["gpt-4.1<br/>(DataZoneStandard)"]
+        OSS["gpt-oss-120b<br/>(GlobalStandard)"]
+        Kimi["Kimi-K2.5<br/>(GlobalStandard)"]
+        Grok["grok-4-20-reasoning<br/>(GlobalStandard)"]
+    end
+
+    LiteLLM -->|azure/gpt-4.1| GPT41
+    LiteLLM -->|azure/gpt-oss-120b| OSS
+    LiteLLM -->|azure/Kimi-K2.5| Kimi
+    LiteLLM -->|azure/grok-4-20-reasoning| Grok
 
     subgraph Supporting Services
-        KV["Key Vault<br/>Provider Secrets"]
         LA["Log Analytics<br/>Metadata Logging"]
     end
 
-    LiteLLM -.-> KV
     LiteLLM -.-> LA
 ```
 
 ### Components
 
 - **Azure Container Apps**: Hosts LiteLLM Proxy with external HTTPS ingress
-- **Azure OpenAI**: Cognitive Services account with gpt-4.1 deployment
-- **Azure AI Foundry**: Hub and Project for serverless model inference
-- **Key Vault**: Secure storage for provider API keys
+- **Azure AIServices Cognitive Account** (`kind = "AIServices"`): Unified Foundry resource hosting all model deployments
+- **Azure Foundry Project** (`azurerm_cognitive_account_project`): Created automatically; used by models requiring project-scoped deployment (`project = true`)
 - **Log Analytics**: Metadata-only logging (no prompt/response content)
 
 ### Default Models
 
-| Model | Provider | Identifier |
-|-------|----------|------------|
-| gpt-4.1 | Azure OpenAI | `azure/gpt-4.1` |
-| gpt-oss-120b | Azure AI Foundry | `azure_ai/gpt-oss-120b` |
+| Model | Format | SKU | LiteLLM identifier |
+|-------|--------|-----|--------------------|
+| `gpt-4.1` | `OpenAI` | DataZoneStandard | `azure/gpt-4.1` |
+| `gpt-oss-120b` | `OpenAI-OSS` | GlobalStandard | `azure/gpt-oss-120b` |
+| `Kimi-K2.5` | `MoonshotAI` | GlobalStandard | `azure/Kimi-K2.5` |
+| `grok-4-20-reasoning` | `xAI` | GlobalStandard | `azure/grok-4-20-reasoning` |
+
+All models are declared in the `var.models` map in `infra/openai.tf`. Adding a model = one map entry + `terraform apply`.
 
 ## Authentication
 
@@ -195,7 +207,7 @@ See [docs/MASTER_KEY_MANAGEMENT.md](docs/MASTER_KEY_MANAGEMENT.md) for details.
 
 ## Roadmap
 
-- **PoC (Current)**: LiteLLM Proxy on Container Apps, MASTER_KEY auth, static model list
+- **PoC (Current)**: LiteLLM Proxy on Container Apps, MASTER_KEY auth, dynamic model map
 - **MVP v0.1**: Custom FastAPI gateway, Table Storage key validation, Azure Monitor
 - **MVP v0.2**: Streaming support, dual-surface routing
 - **MVP v0.3**: Model discovery poller, `/v1/models` endpoint
