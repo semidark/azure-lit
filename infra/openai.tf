@@ -202,6 +202,7 @@ resource "azurerm_cognitive_deployment" "primary_account" {
 
   name                 = each.key
   cognitive_account_id = azurerm_cognitive_account.openai.id
+  rai_policy_name      = azurerm_cognitive_account_rai_policy.permissive.name
 
   model {
     format  = each.value.format
@@ -241,6 +242,9 @@ resource "azapi_resource" "primary_project" {
 }
 
 # Remote accounts, account-scoped
+# Note: rai_policy_name here references a policy on the remote account.
+# Remote accounts don't have the permissive policy — they get the default.
+# TODO: create permissive policy on each regional account if needed.
 resource "azurerm_cognitive_deployment" "remote_account" {
   for_each = local.remote_account_models
 
