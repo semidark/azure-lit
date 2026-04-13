@@ -8,7 +8,7 @@ Planning + infra repo for an OpenAI-compatible LiteLLM gateway on Azure. No appl
   - `main.tf` — Providers, variables, core resources (RG, Log Analytics, Container Apps)
   - `openai.tf` — Azure AIServices Cognitive Account (unified Foundry), Foundry project, gpt-4.1 + gpt-oss-120b deployments
   - `kv.tf` — Comment-only file; Key Vault removed (no longer required by new Foundry)
-  - `config.yaml` — LiteLLM Proxy config; injected into container at deploy time
+  - `config.yaml.tpl` — LiteLLM Proxy config template; rendered by Terraform `templatefile()` and injected into container at deploy time
   - `custom_auth.py` — Future custom auth handler (not wired in PoC)
   - `outputs.tf` — Container App FQDN and URL
 - `docs/` — Design docs
@@ -38,12 +38,9 @@ terraform apply tfplan
 
 | Variable | Default |
 |---|---|
-| `location` | `Germany West Central` |
+| `location` | `germanywestcentral` |
 | `resource_group_name` | `AzureLIT-POC` |
-| `ai_foundry_hub_name` | `AzureLIT-Hub` |
-| `ai_foundry_project_name` | `AzureLIT-Project` |
-
-> Note: `ai_foundry_hub_name` and `ai_foundry_project_name` are legacy variables removed in the new Foundry migration. The project is now created as `azurerm_cognitive_account_project` in `openai.tf` without a separate variable.
+| `models` | See `openai.tf` — map of all model deployments |
 
 ### Providers
 
@@ -57,13 +54,13 @@ LiteLLM Proxy runs as a Container App with external HTTPS ingress on port 4000.
 
 - **Config injection**: An init container writes `config.yaml` from a Container Apps secret into an EmptyDir volume mounted at `/app`. Config changes require redeploy.
 - **Auth**: MASTER_KEY-only. Clients send `Authorization: Bearer <key>`. No DB, no virtual keys, no Admin UI.
-- **Models**: `gpt-4.1` (deployed on AIServices account, `azure/` provider) and `gpt-oss-120b` (deployed into Foundry project, also `azure/` provider — same endpoint).
+- **Models**: Defined in `var.models` map in `openai.tf`. Currently: `gpt-4.1`, `gpt-oss-120b`, `Kimi-K2.5`, `grok-4-20-reasoning` — all on the primary AIServices account (`azure/` provider). Adding a model = one map entry + `terraform apply`.
 - **Container image**: `ghcr.io/berriai/litellm:main-stable`
 
 ## Secrets & Env
 
 - `.env` and `*.tfvars` are gitignored — never commit secrets.
-- Container Apps secrets: `config-yaml`, `azure-ai-key`, `litellm-master-key`.
+- Container Apps secrets: `config-yaml`, `litellm-master-key`, and one `azure-ai-key-<region>` secret per distinct region in the model map (e.g., `azure-ai-key-gwc` for Germany West Central).
 
 ### Variable Injection for Terraform
 
@@ -78,7 +75,7 @@ Full setup in `docs/DEPLOYMENT_SUMMARY.md`.
 
 ## Gotchas
 
-- `config.yaml` changes only take effect on redeploy (no hot reload).
+- `config.yaml.tpl` changes only take effect on redeploy (no hot reload).
 - `litellm_settings.drop_params: true` — prevents clients from overriding provider credentials at request time.
 - Several `general_settings` entries are commented out with a TODO about breaking auth; don't enable without testing.
 - No content logging (prompts/responses); metadata-only with 30-day retention in Log Analytics.

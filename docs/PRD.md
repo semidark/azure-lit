@@ -16,7 +16,7 @@
 - Routing:
   - Support both Azure OpenAI and Foundry serverless inference
 - Observability:
-  - Azure Monitor; no prompt/response content logging; metadata retention 90 days
+  - Azure Monitor; no prompt/response content logging; metadata retention 30 days
 - Region:
     - Germany West Central by default (configurable)
 - CI/CD:
@@ -45,7 +45,7 @@
 - Telemetry:
   - Azure Monitor as primary sink; Application Insights optional, not required for MVP
 - Logging Policy:
-  - No prompt/response content; metadata-only logs with 90-day retention
+  - No prompt/response content; metadata-only logs with 30-day retention
 - Model Naming:
   - Use Foundry shortnames (e.g., gpt-5, o3-mini, gpt-4.1-nano). Optional prefixes (chat_, embed_) for internal capability hints; strip for client-facing names if needed
 - CI/CD:
@@ -85,7 +85,7 @@
 - Performance: First token target under ~2–3 seconds; stable streaming under expected loads (1–100 users)
 - Reliability: Autoscaling; graceful error handling; resilient discovery polling
 - Security: Least-privilege access; provider keys in Key Vault; no sensitive payload logging
-- Compliance: EU data residency; 90-day metadata retention; no PII processing due to content logging disabled
+- Compliance: EU data residency; 30-day metadata retention; no PII processing due to content logging disabled
 - Maintainability: Terraform-managed infrastructure; configurable region and API versions
 
 ## Data and Security

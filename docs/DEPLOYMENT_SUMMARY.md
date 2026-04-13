@@ -27,32 +27,44 @@ export $(grep -v '^#' infra/.env | grep -v '^$' | xargs)
 This Terraform plan deploys a Proof-of-Concept (PoC) for the AzureLIT OpenAI-compatible gateway. The deployment creates the following resources in the configured region within the AzureLIT-POC resource group:
 
 1.  Azure Container App running the LiteLLM proxy with external HTTPS ingress.
-2.  Azure AIServices Cognitive Account (`kind = "AIServices"`) — unified Foundry resource serving both models.
-3.  Azure Foundry Project (`azurerm_cognitive_account_project`) — required to deploy `gpt-oss-120b`.
-4.  Model deployments: `gpt-4.1` (on the account) and `gpt-oss-120b` (on the project).
+2.  Azure AIServices Cognitive Account (`kind = "AIServices"`) — unified Foundry resource serving all models.
+3.  Azure Foundry Project (`azurerm_cognitive_account_project`) — always created; required by models with `project = true`.
+4.  Model deployments driven by `var.models` map. Currently: `gpt-4.1`, `gpt-oss-120b`, `Kimi-K2.5`, `grok-4-20-reasoning` — all account-scoped on the primary account.
 5.  Log Analytics Workspace for observability.
 
 #### Model Routing
 
-Both models share the same AIServices account endpoint and API key:
+All current models share the same AIServices account endpoint and API key (`azure-ai-key-gwc` Container Apps secret):
 
-- `gpt-4.1` (via `azure/gpt-4.1` in config.yaml — standard deployment on account)
-- `gpt-oss-120b` (via `azure/gpt-oss-120b` in config.yaml — deployment on Foundry project)
+| Model | Format | SKU | Scoped to |
+|---|---|---|---|
+| `gpt-4.1` | `OpenAI` | DataZoneStandard | Account |
+| `gpt-oss-120b` | `OpenAI-OSS` | GlobalStandard | Account |
+| `Kimi-K2.5` | `MoonshotAI` | GlobalStandard | Account |
+| `grok-4-20-reasoning` | `xAI` | GlobalStandard | Account |
 
 Clients choose by model name and use a single OpenAI-compatible surface on the LiteLLM proxy. Endpoints supported are `/v1/chat/completions` (streaming supported) and `/v1/models`.
 
+#### Adding Models
+
+Add one entry to `var.models` in `openai.tf` and run `terraform apply`. Terraform automatically:
+- Creates a new regional Cognitive Account if `region` differs from primary
+- Deploys the model (account-scoped via `azurerm_cognitive_deployment`; project-scoped via `azapi_resource` — `azurerm_cognitive_deployment` does not accept project IDs)
+- Regenerates and re-injects `config.yaml` with correct env var references
+- Updates Container App secrets and env vars
+
 #### Config Injection Approach (ACA)
 
-We use an init container and an EmptyDir volume to inject `config.yaml` reliably:
+`config.yaml` is rendered by Terraform's `templatefile()` from `infra/config.yaml.tpl`, then injected as a Container Apps secret:
 
-- A `secret` named `config-yaml` stores the contents of configuration file.
+- A `secret` named `config-yaml` stores the rendered config contents.
 - An `init_container` (busybox) writes the secret value to `/mnt/config/config.yaml`.
 - An `EmptyDir` `volume` named `config-volume` is mounted to both the init container and the main LiteLLM container.
-- The main container runs with args `--config /app/config.yaml` and mounts `/app` to the same `config-volume`, making the config available at runtime. Port exposed is 4000.
+- The main container runs with args `--config /app/config.yaml` and mounts `/app` to the same `config-volume`. Port exposed is 4000.
 
 #### Authentication Model (PoC)
 
-- Configure a single MASTER_KEY via `LITELLM_MASTER_KEY` (Container Apps secret) or `general_settings.master_key` in `config.yaml`.
+- Configure a single MASTER_KEY via `LITELLM_MASTER_KEY` (Container Apps secret) or `general_settings.master_key` in `config.yaml.tpl`.
 - With a MASTER_KEY set, LiteLLM enforces client authentication automatically: clients must include the master key in the Authorization header.
 
 Client requirement:
@@ -68,7 +80,7 @@ Authorization: Bearer sk-<LITELLM_MASTER_KEY>
 
 ### Notes
 
-- Both models are fully Terraform-managed via `azurerm_cognitive_deployment` targeting `azurerm_cognitive_account_project.project.id`. No AzAPI workarounds or manual portal steps required.
-- `gpt-oss-120b` requires `model.format = "OpenAI-OSS"` and must be deployed into a Foundry project (not the root account). This is reflected in `openai.tf`.
-- Single API key (`azure-ai-key` Container Apps secret) covers both models — no separate Foundry key needed.
+- Project-scoped model deployments use `azapi_resource` (type `Microsoft.CognitiveServices/accounts/projects/deployments`). `azurerm_cognitive_deployment` only accepts account-level IDs, not project IDs.
+- `gpt-oss-120b` is currently deployed account-scoped with `GlobalStandard` SKU. Project-scoped deployment via AzAPI hangs in Germany West Central (likely region API instability).
+- API key secrets are named `azure-ai-key-<region_short>` (e.g., `azure-ai-key-gwc`). One secret per distinct region in the model map.
 - MVP will transition to FastAPI gateway using LiteLLM SDK, Table Storage-backed keys, and discovery poller.

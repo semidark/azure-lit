@@ -29,7 +29,7 @@ OpenAI SDK example:
 from openai import OpenAI
 client = OpenAI(api_key="<MASTER_KEY>", base_url="https://<your-container-app-host>")
 resp = client.chat.completions.create(
-    model="gpt-4o-mini",
+    model="gpt-4.1",
     messages=[{"role":"user","content":"hello"}],
 )
 print(resp.choices[0].message.content)
@@ -51,7 +51,9 @@ print(resp.choices[0].message.content)
 3. Apply infrastructure changes:
    ```bash
    cd infra
-   source .env
+   # With direnv: direnv allow
+   # Without direnv:
+   export $(grep -v '^#' .env | grep -v '^$' | xargs)
    terraform apply -auto-approve
    ```
 4. Verify clients are using the new key (update any stored credentials).
