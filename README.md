@@ -6,7 +6,7 @@ An OpenAI-compatible LLM gateway powered by [LiteLLM](https://github.com/BerriAI
 
 AzureLIT provides a lightweight, cost-conscious HTTP gateway that exposes Azure AI Foundry models through an OpenAI-compatible interface. It supports streaming chat completions, responses-only model deployments, and minimal operational overhead.
 
-**Current State:** Proof-of-Concept (PoC) with LiteLLM Proxy
+**Current State:** LiteLLM Proxy on Azure Container Apps
 
 ## Features
 
@@ -185,8 +185,7 @@ print(response.choices[0].message.content)
 │   ├── example.env          # Example environment variables
 │   └── .env                 # Your secrets (gitignored)
 ├── docs/                     # Design and operational documentation
-│   ├── PRD.md               # Product Requirements Document (MVP scope)
-│   ├── POC.md               # Proof-of-Concept approach (current)
+│   ├── ARCHITECTURE.md      # Deployed architecture and model routing
 │   ├── DEPLOYMENT_SUMMARY.md # Operational summary
 │   ├── MASTER_KEY_MANAGEMENT.md # Master/client key operations
 │   ├── CUSTOM_AUTH.md       # Custom auth behavior and limits
@@ -204,24 +203,13 @@ graph LR
         LiteLLM["LiteLLM Proxy<br/>:4000"]
     end
 
-    subgraph Azure AIServices Account - germanywestcentral
-        GPT41["gpt-4.1<br/>(DataZoneStandard)"]
-        OSS["gpt-oss-120b<br/>(GlobalStandard)"]
-        Kimi["Kimi-K2.5<br/>(GlobalStandard)"]
-        Grok["grok-4-20-reasoning<br/>(GlobalStandard)"]
-        GPT54["gpt-5.4<br/>(GlobalStandard)"]
+    subgraph Azure AIServices Account
+        ChatModel["Chat Model<br/>(e.g. gpt-4.1)"]
+        ResponsesModel["Responses Model<br/>(e.g. gpt-5.1-codex)"]
     end
 
-    subgraph Azure AIServices Account - swedencentral
-        Codex["gpt-5.3-codex<br/>(GlobalStandard, Responses API)"]
-    end
-
-    LiteLLM -->|azure/gpt-4.1| GPT41
-    LiteLLM -->|azure/gpt-oss-120b| OSS
-    LiteLLM -->|azure/Kimi-K2.5| Kimi
-    LiteLLM -->|azure/grok-4-20-reasoning| Grok
-    LiteLLM -->|azure/gpt-5.4| GPT54
-    LiteLLM -->|azure/responses/gpt-5.3-codex| Codex
+    LiteLLM -->|azure/<model>| ChatModel
+    LiteLLM -->|azure/responses/<model>| ResponsesModel
 
     subgraph Supporting Services
         LA["Log Analytics<br/>Metadata Logging"]
@@ -238,24 +226,20 @@ graph LR
 - **Azure Foundry Project** (`azurerm_cognitive_account_project`): Created automatically; used by models requiring project-scoped deployment (`project = true`)
 - **Log Analytics**: Metadata-only logging (no prompt/response content)
 
-### Example Models (Snapshot)
+### Example Model Configurations
 
-The model list below is an example snapshot for documentation context and may drift from the current Terraform source. Actual deployability varies by subscription, region, quota, and Azure rollout stage. Use `infra/list-deployable-models.sh` before editing `var.models`. Treat `infra/openai.tf` and Azure CLI model discovery as operational truth.
+The table below shows example model configurations from this repo. Actual deployability varies by subscription, region, quota, and Azure rollout stage. Use `infra/list-deployable-models.sh` to discover what you can deploy, then add entries to `var.models` in `infra/openai.tf`.
 
-| Model | Format | SKU | Region | LiteLLM identifier |
-|-------|--------|-----|--------|--------------------|
-| `gpt-4.1` | `OpenAI` | DataZoneStandard | `germanywestcentral` | `azure/gpt-4.1` |
-| `gpt-oss-120b` | `OpenAI-OSS` | GlobalStandard | `germanywestcentral` | `azure/gpt-oss-120b` |
-| `Kimi-K2.5` | `MoonshotAI` | GlobalStandard | `germanywestcentral` | `azure/Kimi-K2.5` |
-| `grok-4-20-reasoning` | `xAI` | GlobalStandard | `germanywestcentral` | `azure/grok-4-20-reasoning` |
-| `gpt-5.4` | `OpenAI` | GlobalStandard | `germanywestcentral` | `azure/gpt-5.4` |
-| `gpt-5.3-codex` | `OpenAI` | GlobalStandard | `swedencentral` | `azure/responses/gpt-5.3-codex` |
+| Model (example) | Format | SKU | Region | API Surface |
+|-----------------|--------|-----|--------|-------------|
+| `gpt-4.1` | `OpenAI` | DataZoneStandard | `germanywestcentral` | Chat Completions |
+| `gpt-5.1-codex` | `OpenAI` | GlobalStandard | `germanywestcentral` | Responses API only |
 
-All models are declared in the `var.models` map in `infra/openai.tf`. Adding a model = one map entry + `terraform apply`. Responses-only models set `responses_only = true` and are rendered with LiteLLM's `azure/responses/` prefix plus `api_version=preview`.
+Responses-only models (e.g., codex variants) set `responses_only = true` and use LiteLLM's `azure/responses/` prefix with `api_version=preview`.
 
 ## Authentication
 
-The PoC uses a custom auth handler in `infra/custom_auth.py`:
+The deployment uses a custom auth handler in `infra/custom_auth.py`:
 
 - Set `TF_VAR_api_keys` to a comma-separated list of distributed client keys
 - Set `TF_VAR_litellm_master_key` with a value starting with `sk-` for operator/admin use
@@ -267,13 +251,7 @@ See [docs/MASTER_KEY_MANAGEMENT.md](docs/MASTER_KEY_MANAGEMENT.md) for details.
 
 ## Roadmap
 
-- **PoC (Current)**: LiteLLM Proxy on Container Apps, custom auth with client API keys, dynamic model map
-- **MVP v0.1**: Custom FastAPI gateway, Table Storage key validation, Azure Monitor
-- **MVP v0.2**: Streaming support, dual-surface routing
-- **MVP v0.3**: Model discovery poller, `/v1/models` endpoint
-- **v0.4+**: Embeddings, expanded catalog, Terraform hardening
-
-See [docs/PRD.md](docs/PRD.md) for full MVP scope.
+See the `## Next Steps` sections in `docs/ARCHITECTURE.md` and `docs/DEPLOYMENT_SUMMARY.md`.
 
 ## Security Notes
 
@@ -286,8 +264,7 @@ See [docs/PRD.md](docs/PRD.md) for full MVP scope.
 
 ## Documentation
 
-- [PRD](docs/PRD.md) - Product Requirements Document
-- [POC](docs/POC.md) - Proof-of-Concept deployment guide
+- [ARCHITECTURE](docs/ARCHITECTURE.md) - Architecture and deployment behavior
 - [DEPLOYMENT_SUMMARY](docs/DEPLOYMENT_SUMMARY.md) - Operational summary
 - [MASTER_KEY_MANAGEMENT](docs/MASTER_KEY_MANAGEMENT.md) - Master/client key operations
 - [CUSTOM_AUTH](docs/CUSTOM_AUTH.md) - Current custom auth implementation

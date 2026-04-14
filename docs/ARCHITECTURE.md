@@ -1,4 +1,4 @@
-# Proof-of-Concept (PoC) — LiteLLM Proxy on Azure Container Apps
+# Architecture — LiteLLM Proxy on Azure Container Apps
 
 Goal: Validate an OpenAI-compatible LiteLLM gateway on Azure AI Foundry with minimal infrastructure, per-client API key auth, streaming chat support, and support for responses-only model deployments.
 

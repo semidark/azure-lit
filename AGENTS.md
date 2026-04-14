@@ -13,8 +13,7 @@ Planning + infra repo for an OpenAI-compatible LiteLLM gateway on Azure. No appl
   - `list-deployable-models.sh` — Azure CLI + jq helper to inspect deployable model name/version/SKU/capabilities
   - `outputs.tf` — Container App FQDN and URL
 - `docs/` — Design docs
-  - `PRD.md` — Full MVP product requirements
-  - `POC.md` — Current deployment approach and architecture
+  - `ARCHITECTURE.md` — Current deployment approach and architecture
   - `LINKS.md` — Curated external references (LiteLLM, Azure, Terraform)
   - `DEPLOYMENT_SUMMARY.md`, `MASTER_KEY_MANAGEMENT.md`, `CUSTOM_AUTH.md` — Operational docs
   - `PG_SIDECAR_FINDINGS.md` — Investigation into PostgreSQL sidecar approach (abandoned)
