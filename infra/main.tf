@@ -189,6 +189,12 @@ resource "azurerm_container_app" "ca" {
         value = "2024-10-21"
       }
 
+      # Force a new revision when rendered config changes.
+      env {
+        name  = "LITELLM_CONFIG_SHA"
+        value = sha256(local.config_yaml)
+      }
+
       # One API_BASE + API_KEY env var per distinct region
       dynamic "env" {
         for_each = local.account_endpoints

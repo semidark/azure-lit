@@ -80,6 +80,15 @@ variable "models" {
       project        = false
       responses_only = true
     }
+    "gpt-5.1-codex" = {
+      format         = "OpenAI"
+      version        = "2025-11-13"
+      sku            = "GlobalStandard"
+      capacity       = 10
+      region         = "germanywestcentral"
+      project        = false
+      responses_only = true
+    }
   }
 }
 
