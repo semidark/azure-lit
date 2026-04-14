@@ -21,9 +21,11 @@ Goal: Validate an OpenAI-compatible LiteLLM gateway on Azure AI Foundry with min
 
 ## Models (var.models)
 
-All models are declared in the `var.models` map in `openai.tf`. Currently deployed:
+All models are declared in the `var.models` map in `openai.tf`.
 
-| Model | Format | SKU | Region |
+The model list below is an example snapshot for documentation context and may drift from the current Terraform source. Actual deployability varies by subscription, region, quota, and Azure rollout stage. Treat `infra/openai.tf` and Azure CLI model discovery as operational truth.
+
+| Model (example snapshot) | Format | SKU | Region |
 |---|---|---|---|
 | `gpt-4.1` | `OpenAI` | DataZoneStandard | germanywestcentral |
 | `gpt-oss-120b` | `OpenAI-OSS` | GlobalStandard | germanywestcentral |
@@ -37,6 +39,26 @@ All models are declared in the `var.models` map in `openai.tf`. Currently deploy
 - Uses the Responses API wiring automatically when `responses_only = true`
 - Regenerates `config.yaml` with the correct env var references
 - Updates Container App secrets and env vars
+
+### Discovering Supported Models
+
+Before editing `var.models`, inspect what your target account can deploy:
+
+```bash
+cd infra
+./list-deployable-models.sh --name gpt-5 --capability responses
+```
+
+Map helper output to Terraform fields:
+
+- `name` -> model key + deployment name
+- `format` -> `format`
+- `version` -> `version`
+- selected SKU -> `sku`
+
+Capability hint:
+
+- If `responses=true` and `chatCompletion=false`, set `responses_only = true`
 
 **Project-scoped models:** Set `project = true` for models that require a Foundry project. These are deployed via `azapi_resource` (not `azurerm_cognitive_deployment`, which cannot target project IDs).
 

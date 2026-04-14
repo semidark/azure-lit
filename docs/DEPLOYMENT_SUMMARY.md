@@ -29,14 +29,14 @@ This Terraform plan deploys an OpenAI-compatible LiteLLM Proxy gateway on Azure 
 1. Azure Container App running the LiteLLM Proxy with external HTTPS ingress.
 2. Azure AIServices Cognitive Account (`kind = "AIServices"`) — unified Foundry resource serving all models.
 3. Azure Foundry Project (`azurerm_cognitive_account_project`) — always created; required by models with `project = true`.
-4. Model deployments driven by `var.models` map. Currently: `gpt-4.1`, `gpt-oss-120b`, `Kimi-K2.5`, `grok-4-20-reasoning`, `gpt-5.4`, and `gpt-5.3-codex`.
+4. Model deployments driven by `var.models` map in `infra/openai.tf` (repo-maintained example set; customize per subscription/region/SKU availability).
 5. Log Analytics Workspace for observability.
 
 #### Model Routing
 
-Most models share the primary AIServices account endpoint and API key (`azure-ai-key-gwc` Container Apps secret). `gpt-5.3-codex` is deployed in Sweden Central and uses its own regional account and secret (`azure-ai-key-swc`).
+Most models share the primary AIServices account endpoint and API key (`azure-ai-key-gwc` Container Apps secret). Models in non-primary regions use region-specific accounts and secrets (for example, `azure-ai-key-swc` for Sweden Central).
 
-| Model | Format | SKU | Region | API Surface |
+| Model (example snapshot) | Format | SKU | Region | API Surface |
 |---|---|---|---|---|
 | `gpt-4.1` | `OpenAI` | DataZoneStandard | germanywestcentral | Chat Completions |
 | `gpt-oss-120b` | `OpenAI-OSS` | GlobalStandard | germanywestcentral | Chat Completions |
@@ -46,6 +46,21 @@ Most models share the primary AIServices account endpoint and API key (`azure-ai
 | `gpt-5.3-codex` | `OpenAI` | GlobalStandard | swedencentral | Responses API only |
 
 Clients choose by model name via a single OpenAI-compatible surface. Standard chat models use `/v1/chat/completions` (streaming supported). Responses-only models such as `gpt-5.3-codex` are wired with LiteLLM's `azure/responses/` prefix and `api_version=preview`.
+
+The model list above is an example snapshot for documentation context and may drift from the current Terraform source. Actual deployability varies by subscription, region, quota, and Azure rollout stage. Treat `infra/openai.tf` and Azure CLI model discovery as operational truth.
+
+#### Choosing Deployable Models
+
+Do not assume a model family/version/SKU is deployable in your subscription. Use the helper first:
+
+```sh
+cd infra
+./list-deployable-models.sh --name gpt-5 --capability responses
+```
+
+Then copy exact `name`, `version`, and `sku` values into `var.models`.
+
+If `responses=true` and `chatCompletion=false`, set `responses_only = true`.
 
 #### Adding Models
 

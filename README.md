@@ -88,6 +88,8 @@ curl -sS \
   -H "Authorization: Bearer $API_KEY" \
   "$ENDPOINT/v1/models"
 
+# Replace model names below with models you actually deployed.
+
 # Test chat completion
 curl -sS \
   -H "Authorization: Bearer $API_KEY" \
@@ -110,6 +112,43 @@ curl -sS \
   }' \
   "$ENDPOINT/v1/chat/completions"
 ```
+
+### Inspect Deployable Models (Azure CLI Helper)
+
+To avoid guessing model name/version/SKU combinations, use:
+
+```bash
+cd infra
+./list-deployable-models.sh --name codex
+```
+
+Useful filters:
+
+```bash
+# Only models that support the Responses API
+./list-deployable-models.sh --capability responses
+
+# Search by family + capability
+./list-deployable-models.sh --name gpt-5.1 --capability responses
+
+# Check models supporting a specific SKU
+./list-deployable-models.sh --sku DataZoneStandard
+```
+
+Requirements: `az` (logged in) and `jq` installed locally.
+
+Recommended workflow before editing `infra/openai.tf`:
+
+```bash
+# 1) Discover what this account can actually deploy
+./list-deployable-models.sh --name gpt-5 --capability responses
+
+# 2) Pick exact name + version + SKU from output
+# 3) Add/update the entry in var.models
+# 4) Deploy with terraform plan/apply
+```
+
+If `responses=true` and `chatCompletion=false`, set `responses_only = true`.
 
 ### Using with OpenAI SDK
 
@@ -140,6 +179,7 @@ print(response.choices[0].message.content)
 │   ├── kv.tf                # Comment-only; Key Vault removed in new Foundry
 │   ├── config.yaml.tpl      # LiteLLM Proxy config template (rendered by Terraform)
 │   ├── custom_auth.py       # Custom auth handler injected into the container
+│   ├── list-deployable-models.sh # Azure CLI + jq helper for deployable models
 │   ├── outputs.tf           # Deployment outputs (FQDN, URL)
 │   ├── rai.tf               # Permissive RAI policies for primary/regional accounts
 │   ├── example.env          # Example environment variables
@@ -198,7 +238,9 @@ graph LR
 - **Azure Foundry Project** (`azurerm_cognitive_account_project`): Created automatically; used by models requiring project-scoped deployment (`project = true`)
 - **Log Analytics**: Metadata-only logging (no prompt/response content)
 
-### Default Models
+### Example Models (Snapshot)
+
+The model list below is an example snapshot for documentation context and may drift from the current Terraform source. Actual deployability varies by subscription, region, quota, and Azure rollout stage. Use `infra/list-deployable-models.sh` before editing `var.models`. Treat `infra/openai.tf` and Azure CLI model discovery as operational truth.
 
 | Model | Format | SKU | Region | LiteLLM identifier |
 |-------|--------|-----|--------|--------------------|

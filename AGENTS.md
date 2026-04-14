@@ -10,6 +10,7 @@ Planning + infra repo for an OpenAI-compatible LiteLLM gateway on Azure. No appl
   - `kv.tf` — Comment-only file; Key Vault removed (no longer required)
   - `config.yaml.tpl` — LiteLLM Proxy config template; rendered by Terraform `templatefile()` and injected into container at deploy time
   - `custom_auth.py` — Custom auth handler; validates Bearer tokens against `API_KEYS` env var + master key
+  - `list-deployable-models.sh` — Azure CLI + jq helper to inspect deployable model name/version/SKU/capabilities
   - `outputs.tf` — Container App FQDN and URL
 - `docs/` — Design docs
   - `PRD.md` — Full MVP product requirements
@@ -55,7 +56,7 @@ LiteLLM Proxy runs as a Container App with external HTTPS ingress on port 4000.
 
 - **Config injection**: A secret volume mounts all Container App secrets as files at `/mnt/secrets`. The container entrypoint copies `config-yaml` → `/app/config.yaml` and `custom-auth-py` → `/app/custom_auth.py` into an EmptyDir volume before starting LiteLLM. Changes require redeploy (`terraform apply`).
 - **Auth**: `custom_auth.py` validates Bearer tokens against client API keys (`API_KEYS` env var) and the master key (`LITELLM_MASTER_KEY`). No DB, no virtual keys, no Admin UI. `/ui` and `/key/*` routes are disabled.
-- **Models**: Defined in `var.models` map in `openai.tf`. Currently: `gpt-4.1`, `gpt-oss-120b`, `Kimi-K2.5`, `grok-4-20-reasoning`, `gpt-5.4`, and `gpt-5.3-codex`. Most are on the primary AIServices account; `gpt-5.3-codex` is regional in `swedencentral` and uses LiteLLM's responses-only wiring.
+- **Models**: Defined in `var.models` map in `openai.tf`. Doc model lists are example snapshots and may drift from Terraform source. Treat `openai.tf` plus Azure CLI model discovery as operational truth. Before adding/changing models, use `infra/list-deployable-models.sh` (or `az cognitiveservices account list-models`) to validate exact deployable `name`, `version`, and `sku` for the target account.
 - **Container image**: `ghcr.io/berriai/litellm:main-v1.82.3` (pinned)
 - **Upstream auth**: API key per Cognitive Account region, stored as Container App secrets (`azure-ai-key-<region>`), injected as `AZURE_AI_API_KEY_<REGION>` env vars.
 
@@ -89,6 +90,7 @@ Full setup in `docs/DEPLOYMENT_SUMMARY.md`.
 - `custom_auth` replaces LiteLLM's built-in master key check entirely — the handler explicitly also accepts `LITELLM_MASTER_KEY` so admin operations keep working.
 - No content logging (prompts/responses); metadata-only with 30-day retention in Log Analytics.
 - The secret volume at `/mnt/secrets` contains **all** Container App secrets as files — only `config-yaml` and `custom-auth-py` are used; the rest are harmless extras.
+- Azure model availability is subscription/region/quota dependent. Do not assume a model in docs is deployable; verify with the helper first.
 
 ## Next Steps
 
