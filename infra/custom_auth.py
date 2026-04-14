@@ -46,6 +46,11 @@ def _load_keys() -> set[str]:
 
 
 async def user_api_key_auth(request: Request, api_key: str) -> UserAPIKeyAuth:
+    # Allow health check endpoints through without authentication so that
+    # Azure Container Apps probes can reach them without a Bearer token.
+    if request.url.path.startswith("/health/"):
+        return UserAPIKeyAuth(api_key="health-probe")
+
     if api_key not in _load_keys():
         raise Exception("Invalid API key")
     return UserAPIKeyAuth(api_key=api_key)

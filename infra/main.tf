@@ -79,7 +79,8 @@ locals {
     region_short = local.region_short
   })
 
-  custom_auth_py = file("${path.module}/custom_auth.py")
+  custom_auth_py    = file("${path.module}/custom_auth.py")
+  usage_callback_py = file("${path.module}/usage_callback.py")
 
   # Flattened list of {env_key, secret_name, endpoint} per distinct region
   # Used to build dynamic Container App secrets + env vars
@@ -120,6 +121,18 @@ resource "azurerm_container_app" "ca" {
     value = local.custom_auth_py
   }
 
+  # usage_callback.py source — copied to /app/usage_callback.py by container entrypoint
+  secret {
+    name  = "usage-callback-py"
+    value = local.usage_callback_py
+  }
+
+  # Log Analytics shared key
+  secret {
+    name  = "log-analytics-key"
+    value = azurerm_log_analytics_workspace.la.primary_shared_key
+  }
+
   # One API key secret per distinct region
   dynamic "secret" {
     for_each = local.distinct_regions
@@ -131,7 +144,7 @@ resource "azurerm_container_app" "ca" {
 
   template {
     min_replicas               = 0
-    max_replicas               = 1
+    max_replicas               = 2
     cooldown_period_in_seconds = 600
 
     # Secret volume: all Container App secrets are mounted as files.
@@ -159,7 +172,7 @@ resource "azurerm_container_app" "ca" {
       # Replaces the former busybox init container, eliminating that image pull
       # from the cold-start path.
       command = ["/bin/sh", "-c"]
-      args    = ["cp /mnt/secrets/config-yaml /app/config.yaml && cp /mnt/secrets/custom-auth-py /app/custom_auth.py && exec litellm --config /app/config.yaml --port 4000 --host 0.0.0.0"]
+      args    = ["cp /mnt/secrets/config-yaml /app/config.yaml && cp /mnt/secrets/custom-auth-py /app/custom_auth.py && cp /mnt/secrets/usage-callback-py /app/usage_callback.py && exec litellm --config /app/config.yaml --port 4000 --host 0.0.0.0"]
 
       env {
         name        = "LITELLM_MASTER_KEY"
@@ -195,6 +208,33 @@ resource "azurerm_container_app" "ca" {
         value = sha256(local.config_yaml)
       }
 
+      # Force a new revision when custom_auth.py or usage_callback.py change.
+      env {
+        name  = "CUSTOM_AUTH_SHA"
+        value = sha256(local.custom_auth_py)
+      }
+
+      env {
+        name  = "USAGE_CALLBACK_SHA"
+        value = sha256(local.usage_callback_py)
+      }
+
+      # Log Analytics credentials for usage tracking
+      env {
+        name  = "LOG_ANALYTICS_CUSTOMER_ID"
+        value = azurerm_log_analytics_workspace.la.workspace_id
+      }
+
+      env {
+        name        = "LOG_ANALYTICS_KEY"
+        secret_name = "log-analytics-key"
+      }
+
+      env {
+        name  = "USAGE_LOG_TYPE"
+        value = "LiteLLMUsage"
+      }
+
       # One API_BASE + API_KEY env var per distinct region
       dynamic "env" {
         for_each = local.account_endpoints
@@ -210,6 +250,44 @@ resource "azurerm_container_app" "ca" {
           name        = "AZURE_AI_API_KEY_${upper(local.region_short[env.value])}"
           secret_name = "azure-ai-key-${local.region_short[env.value]}"
         }
+      }
+
+      # Startup probe: prevents liveness from killing the container during LiteLLM
+      # initialisation (model list loading, plugin imports, etc.).
+      # 10s initial delay + up to 10 failures × 5s period = ~60s startup window.
+      startup_probe {
+        transport = "HTTP"
+        path      = "/health/liveliness"
+        port      = 4000
+
+        initial_delay           = 10
+        interval_seconds        = 5
+        failure_count_threshold = 10
+      }
+
+      # Liveness probe: restarts the container if LiteLLM becomes unresponsive.
+      liveness_probe {
+        transport = "HTTP"
+        path      = "/health/liveliness"
+        port      = 4000
+
+        initial_delay           = 0
+        interval_seconds        = 10
+        failure_count_threshold = 3
+      }
+
+      # Readiness probe: keeps the container out of the load balancer rotation
+      # until LiteLLM is fully initialised and ready to handle requests.
+      # /health/readiness is gated by custom_auth.py, which now bypasses auth
+      # for all /health/* paths so the probe can reach it without a Bearer token.
+      readiness_probe {
+        transport = "HTTP"
+        path      = "/health/readiness"
+        port      = 4000
+
+        interval_seconds        = 5
+        failure_count_threshold = 3
+        success_count_threshold = 1
       }
 
       volume_mounts {
