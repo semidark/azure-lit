@@ -37,6 +37,7 @@ terraform.rc
 infra/.env
 
 
+infra/*tfstate*
 infra/tfplan
 infra/.env.bak
 infra/.terraform.lock.hcl
@@ -46,3 +47,4 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
+

@@ -4,15 +4,11 @@ An OpenAI-compatible LLM gateway powered by [LiteLLM](https://github.com/BerriAI
 
 ## Overview
 
-AzureLIT provides a lightweight, cost-conscious HTTP gateway that exposes Azure AI Foundry models through an OpenAI-compatible interface. It supports streaming chat completions, responses-only model deployments, and minimal operational overhead.
-
-**Current State:** LiteLLM Proxy on Azure Container Apps
+AzureLIT provides a lightweight, cost-conscious HTTPS gateway that exposes Azure AI Foundry models through an OpenAI-compatible interface.
 
 ## Features
 
 - **OpenAI-Compatible API**: Drop-in replacement for OpenAI SDK clients
-  - `POST /v1/chat/completions` with streaming support
-  - `GET /v1/models` for model discovery
 - **Multi-Model Support**: Declarative `var.models` map — add a model with one Terraform map entry
 - **Authentication**: Custom auth handler validates distributed client API keys and the master key
 - **Usage Tracking**: Per-key analytics with Azure Log Analytics — track tokens, cache usage, cost, and failures
@@ -170,36 +166,6 @@ response = client.chat.completions.create(
 print(response.choices[0].message.content)
 ```
 
-## Project Structure
-
-```
-.
-├── infra/                    # Terraform infrastructure
-│   ├── main.tf              # Core resources (RG, Log Analytics, Container Apps, Storage)
-│   ├── openai.tf            # var.models map, AIServices account, Foundry project, deployments
-│   ├── kv.tf                # Comment-only; Key Vault removed in new Foundry
-│   ├── config.yaml.tpl      # LiteLLM Proxy config template (rendered by Terraform)
-│   ├── custom_auth.py       # Custom auth handler injected into the container
-│   ├── usage_callback.py    # Usage tracking callback for Log Analytics
-│   ├── list-deployable-models.sh # Azure CLI + jq helper for deployable models
-│   ├── outputs.tf           # Deployment outputs (FQDN, URL, Storage Account)
-│   ├── rai.tf               # Permissive RAI policies for primary/regional accounts
-│   ├── usage_callback.py    # Usage tracking callback for Log Analytics
-│   ├── example.env          # Example environment variables
-│   └── .env                 # Your secrets (gitignored)
-├── scripts/                  # Utility scripts
-│   └── usage-report.py      # CLI tool for usage analytics
-├── docs/                     # Design and operational documentation
-│   ├── ARCHITECTURE.md      # Architecture and deployment behavior
-│   ├── DEPLOYMENT_SUMMARY.md # Operational summary
-│   ├── MASTER_KEY_MANAGEMENT.md # Master/client key operations
-│   ├── CUSTOM_AUTH.md       # Custom auth implementation
-│   ├── USAGE_ANALYSIS.md    # Per-key usage tracking and reporting
-│   ├── USAGE_TRACKING_IMPLEMENTATION.md # Implementation details
-│   ├── DEFENDER_AI_SERVICES.md # Defender for AI Services security
-│   └── LINKS.md             # External references
-└── AGENTS.md                 # Agent-specific project context
-```
 
 ## Architecture
 
