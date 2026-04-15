@@ -49,7 +49,7 @@ def resolve_workspace_id() -> str:
             "workspace",
             "show",
             "--workspace-name",
-            "AzureLIT-POC-LA",
+            "AzureLIT-POC-LA-2",
             "--resource-group",
             "AzureLIT-POC",
             "--query",

@@ -107,7 +107,7 @@ resource "azurerm_resource_group" "rg" {
 }
 
 resource "azurerm_log_analytics_workspace" "la" {
-  name                = "AzureLIT-POC-LA"
+  name                = "AzureLIT-POC-LA-2"
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
   sku                 = "PerGB2018"
