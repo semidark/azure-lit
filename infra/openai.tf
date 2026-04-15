@@ -21,55 +21,63 @@
 variable "models" {
   description = "Map of model deployments. Key becomes the deployment name and LiteLLM model alias."
   type = map(object({
-    format         = string
-    version        = string
-    sku            = string
-    capacity       = number
-    region         = string
-    project        = optional(bool, false)
-    responses_only = optional(bool, false)
+    format                = string
+    version               = string
+    sku                   = string
+    capacity              = number
+    region                = string
+    project               = optional(bool, false)
+    responses_only        = optional(bool, false)
+    base_model            = optional(string)
+    input_cost_per_token  = optional(number)
+    output_cost_per_token = optional(number)
   }))
 
   default = {
     "gpt-4.1" = {
-      format   = "OpenAI"
-      version  = "2025-04-14"
-      sku      = "DataZoneStandard"
-      capacity = 50
-      region   = "germanywestcentral"
-      project  = false
+      format     = "OpenAI"
+      version    = "2025-04-14"
+      sku        = "DataZoneStandard"
+      capacity   = 50
+      region     = "germanywestcentral"
+      project    = false
+      base_model = "azure/gpt-4.1"
     }
     "gpt-oss-120b" = {
-      format   = "OpenAI-OSS"
-      version  = "1"
-      sku      = "GlobalStandard"
-      capacity = 10
-      region   = "germanywestcentral"
-      project  = false
+      format     = "OpenAI-OSS"
+      version    = "1"
+      sku        = "GlobalStandard"
+      capacity   = 10
+      region     = "germanywestcentral"
+      project    = false
+      base_model = "azure_ai/gpt-oss-120b"
     }
     "Kimi-K2.5" = {
-      format   = "MoonshotAI"
-      version  = "1"
-      sku      = "GlobalStandard"
-      capacity = 100 # quota limit on sandbox subscription
-      region   = "germanywestcentral"
-      project  = false
+      format     = "MoonshotAI"
+      version    = "1"
+      sku        = "GlobalStandard"
+      capacity   = 100 # quota limit on sandbox subscription
+      region     = "germanywestcentral"
+      project    = false
+      base_model = "azure_ai/kimi-k2.5"
     }
     "grok-4-20-reasoning" = {
-      format   = "xAI"
-      version  = "1"
-      sku      = "GlobalStandard"
-      capacity = 1
-      region   = "germanywestcentral"
-      project  = false
+      format     = "xAI"
+      version    = "1"
+      sku        = "GlobalStandard"
+      capacity   = 1
+      region     = "germanywestcentral"
+      project    = false
+      base_model = "azure_ai/grok-4"
     }
     "gpt-5.4" = {
-      format   = "OpenAI"
-      version  = "2026-03-05"
-      sku      = "GlobalStandard"
-      capacity = 1000
-      region   = "germanywestcentral"
-      project  = false
+      format     = "OpenAI"
+      version    = "2026-03-05"
+      sku        = "GlobalStandard"
+      capacity   = 1000
+      region     = "germanywestcentral"
+      project    = false
+      base_model = "azure/gpt-5.4"
     }
     "gpt-5.3-codex" = {
       format         = "OpenAI"
@@ -79,6 +87,7 @@ variable "models" {
       region         = "swedencentral"
       project        = false
       responses_only = true
+      base_model     = "azure/gpt-5.3-codex"
     }
     "gpt-5.1-codex" = {
       format         = "OpenAI"
@@ -88,6 +97,7 @@ variable "models" {
       region         = "germanywestcentral"
       project        = false
       responses_only = true
+      base_model     = "azure/gpt-5.1-codex"
     }
   }
 }

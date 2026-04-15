@@ -6,6 +6,18 @@ model_list:
 %{ if model.responses_only ~}
   # Responses-only model (e.g. codex) — uses /v1/preview endpoint via azure/responses/ prefix
   - model_name: ${name}
+%{ if try(model.base_model, null) != null || try(model.input_cost_per_token, null) != null || try(model.output_cost_per_token, null) != null ~}
+    model_info:
+%{ if try(model.base_model, null) != null ~}
+      base_model: ${model.base_model}
+%{ endif ~}
+%{ if try(model.input_cost_per_token, null) != null ~}
+      input_cost_per_token: ${model.input_cost_per_token}
+%{ endif ~}
+%{ if try(model.output_cost_per_token, null) != null ~}
+      output_cost_per_token: ${model.output_cost_per_token}
+%{ endif ~}
+%{ endif ~}
     litellm_params:
       model: azure/responses/${name}
       api_base: os.environ/AZURE_AI_API_BASE_${upper(region_short[model.region])}
@@ -15,6 +27,15 @@ model_list:
   - model_name: ${name}
     model_info:
       mode: chat
+%{ if try(model.base_model, null) != null ~}
+      base_model: ${model.base_model}
+%{ endif ~}
+%{ if try(model.input_cost_per_token, null) != null ~}
+      input_cost_per_token: ${model.input_cost_per_token}
+%{ endif ~}
+%{ if try(model.output_cost_per_token, null) != null ~}
+      output_cost_per_token: ${model.output_cost_per_token}
+%{ endif ~}
     litellm_params:
       model: azure/${name}
       api_base: os.environ/AZURE_AI_API_BASE_${upper(region_short[model.region])}
@@ -29,6 +50,9 @@ litellm_settings:
   drop_unknown_params: true
   set_verbose: false
   json_logs: true
+  
+  # Usage tracking callback - CustomLogger instance for async success/failure events
+  callbacks: usage_callback.proxy_handler_instance
 
 # General proxy settings
 general_settings:
@@ -51,6 +75,7 @@ general_settings:
   disable_adding_master_key_hash_to_db: true
   # Allow requests if LiteLLM probes for a DB and finds none
   allow_requests_on_db_unavailable: true
+  
   # forward_client_headers_to_llm_api omitted — default (false/None) is correct;
   # proxy Authorization header is never forwarded to upstream regardless.
   # timeout omitted — let provider defaults apply; reasoning models can exceed 60s.

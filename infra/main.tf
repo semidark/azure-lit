@@ -46,6 +46,37 @@ variable "api_keys" {
 }
 
 # =============================================================================
+# DEFENDER FOR CLOUD — AI SERVICES
+# =============================================================================
+#
+# Microsoft Defender for AI Services (Standard tier) monitors all AIServices
+# Cognitive Accounts in the subscription for prompt injection, jailbreak
+# attempts, data exfiltration, and other AI-specific threats. It is billed
+# per transaction (~$0.015 / 1,000 requests) at the subscription level —
+# not per resource — so even low traffic accumulates visible charges.
+#
+# It is explicitly set to "Free" here (effectively disabled) because:
+#   - This is a POC/internal deployment with trusted callers and API-key auth.
+#   - Input never comes from untrusted end-users directly.
+#   - The per-transaction cost is not justified at current usage levels.
+#
+# SECURITY IMPACT OF DISABLING:
+#   - No real-time detection of prompt injection or jailbreak attacks.
+#   - No Defender for Cloud alerts for AI-specific threat patterns.
+#   - No integration with Microsoft Threat Intelligence for AI workloads.
+#
+# RE-ENABLE FOR PRODUCTION: Change tier to "Standard" (or remove this resource
+# entirely — Standard is the Azure default) when:
+#   - The API is exposed to untrusted users or public internet traffic.
+#   - Input content is not fully controlled (e.g. user-supplied prompts).
+#   - Compliance or security policy requires AI threat monitoring.
+#
+resource "azurerm_security_center_subscription_pricing" "defender_ai" {
+  tier          = "Free"
+  resource_type = "AI"
+}
+
+# =============================================================================
 # CORE INFRASTRUCTURE
 # =============================================================================
 

@@ -40,3 +40,9 @@ infra/.env
 infra/tfplan
 infra/.env.bak
 infra/.terraform.lock.hcl
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
