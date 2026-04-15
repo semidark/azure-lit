@@ -15,6 +15,7 @@ AzureLIT provides a lightweight, cost-conscious HTTP gateway that exposes Azure 
   - `GET /v1/models` for model discovery
 - **Multi-Model Support**: Declarative `var.models` map — add a model with one Terraform map entry
 - **Authentication**: Custom auth handler validates distributed client API keys and the master key
+- **Usage Tracking**: Per-key analytics with Azure Table Storage — track tokens, cost, and failures
 - **Infrastructure as Code**: Fully automated deployment via Terraform
 - **Observability**: Azure Monitor integration with metadata-only logging (no prompt/response content)
 - **Hardened Deployment**: Pinned LiteLLM image, HTTPS-only ingress, disabled UI/key routes, and constrained scale settings
@@ -174,21 +175,25 @@ print(response.choices[0].message.content)
 ```
 .
 ├── infra/                    # Terraform infrastructure
-│   ├── main.tf              # Core resources (RG, Log Analytics, Container Apps)
+│   ├── main.tf              # Core resources (RG, Log Analytics, Container Apps, Storage)
 │   ├── openai.tf            # var.models map, AIServices account, Foundry project, deployments
 │   ├── kv.tf                # Comment-only; Key Vault removed in new Foundry
 │   ├── config.yaml.tpl      # LiteLLM Proxy config template (rendered by Terraform)
 │   ├── custom_auth.py       # Custom auth handler injected into the container
+│   ├── usage_callback.py    # Usage tracking callback for Azure Table Storage
 │   ├── list-deployable-models.sh # Azure CLI + jq helper for deployable models
-│   ├── outputs.tf           # Deployment outputs (FQDN, URL)
+│   ├── outputs.tf           # Deployment outputs (FQDN, URL, Storage Account)
 │   ├── rai.tf               # Permissive RAI policies for primary/regional accounts
 │   ├── example.env          # Example environment variables
 │   └── .env                 # Your secrets (gitignored)
+├── scripts/                  # Utility scripts
+│   └── usage-report.py      # CLI tool for usage analytics
 ├── docs/                     # Design and operational documentation
 │   ├── ARCHITECTURE.md      # Deployed architecture and model routing
 │   ├── DEPLOYMENT_SUMMARY.md # Operational summary
 │   ├── MASTER_KEY_MANAGEMENT.md # Master/client key operations
 │   ├── CUSTOM_AUTH.md       # Custom auth behavior and limits
+│   ├── USAGE_ANALYSIS.md    # Per-key usage tracking and reporting
 │   └── LINKS.md             # External references
 └── AGENTS.md                 # Agent-specific project context
 ```
@@ -225,6 +230,7 @@ graph LR
 - **Regional AIServices Accounts**: Created automatically when `var.models` targets a non-primary region
 - **Azure Foundry Project** (`azurerm_cognitive_account_project`): Created automatically; used by models requiring project-scoped deployment (`project = true`)
 - **Log Analytics**: Metadata-only logging (no prompt/response content)
+- **Azure Table Storage**: Per-key usage tracking (tokens, cost, failures)
 
 ### Example Model Configurations
 
@@ -245,9 +251,23 @@ The deployment uses a custom auth handler in `infra/custom_auth.py`:
 - Set `TF_VAR_litellm_master_key` with a value starting with `sk-` for operator/admin use
 - Clients authenticate with `Authorization: Bearer <api_key>`
 - The custom auth handler also accepts the master key so admin operations still work
-- No per-key budgets or model restrictions yet
 
-See [docs/MASTER_KEY_MANAGEMENT.md](docs/MASTER_KEY_MANAGEMENT.md) for details.
+## Usage Tracking
+
+Per-key usage analytics are tracked in Azure Table Storage:
+
+```bash
+# Daily summary
+python scripts/usage-report.py --date 2026-04-15
+
+# Date range
+python scripts/usage-report.py --from 2026-04-01 --to 2026-04-15
+
+# Export to CSV
+python scripts/usage-report.py --from 2026-04-01 --to 2026-04-15 --format csv > usage.csv
+```
+
+See [docs/USAGE_ANALYSIS.md](docs/USAGE_ANALYSIS.md) for full documentation.
 
 ## Roadmap
 
@@ -267,7 +287,8 @@ See the `## Next Steps` sections in `docs/ARCHITECTURE.md` and `docs/DEPLOYMENT_
 - [ARCHITECTURE](docs/ARCHITECTURE.md) - Architecture and deployment behavior
 - [DEPLOYMENT_SUMMARY](docs/DEPLOYMENT_SUMMARY.md) - Operational summary
 - [MASTER_KEY_MANAGEMENT](docs/MASTER_KEY_MANAGEMENT.md) - Master/client key operations
-- [CUSTOM_AUTH](docs/CUSTOM_AUTH.md) - Current custom auth implementation
+- [CUSTOM_AUTH](docs/CUSTOM_AUTH.md) - Custom auth implementation
+- [USAGE_ANALYSIS](docs/USAGE_ANALYSIS.md) - Per-key usage tracking and reporting
 - [LINKS](docs/LINKS.md) - External references
 
 ## License

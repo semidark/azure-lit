@@ -1,0 +1,5 @@
+# AzureLIT Usage Analysis CLI Requirements
+# Install with: pip install -r scripts/requirements.txt
+
+requests>=2.31.0
+azure-identity>=1.15.0
