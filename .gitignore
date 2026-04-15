@@ -14,7 +14,7 @@ crash.*.log
 *.tfvars
 *.tfvars.json
 
-# Ignore override files as they are usually used for local testing or 
+# Ignore override files as they are usually used for local testing or
 # development overrides.
 override.tf
 override.tf.json
@@ -47,4 +47,3 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
-

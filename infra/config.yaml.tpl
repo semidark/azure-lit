@@ -50,7 +50,7 @@ litellm_settings:
   drop_unknown_params: true
   set_verbose: false
   json_logs: true
-  
+
   # Usage tracking callback - CustomLogger instance for async success/failure events
   callbacks: usage_callback.proxy_handler_instance
 
@@ -75,7 +75,7 @@ general_settings:
   disable_adding_master_key_hash_to_db: true
   # Allow requests if LiteLLM probes for a DB and finds none
   allow_requests_on_db_unavailable: true
-  
+
   # forward_client_headers_to_llm_api omitted — default (false/None) is correct;
   # proxy Authorization header is never forwarded to upstream regardless.
   # timeout omitted — let provider defaults apply; reasoning models can exceed 60s.

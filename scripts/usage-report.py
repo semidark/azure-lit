@@ -127,7 +127,7 @@ LiteLLMUsage_CL
 
     if group_by == "model":
         query += """
-| summarize 
+| summarize
     Requests = count(),
     TokensIn = sum(TokensInNorm),
     TokensOut = sum(TokensOutNorm),
@@ -137,7 +137,7 @@ LiteLLMUsage_CL
 """
     else:
         query += """
-| summarize 
+| summarize
     Requests = count(),
     Failures = countif(StatusNorm == "failure"),
     TokensIn = sum(TokensInNorm),
