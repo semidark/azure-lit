@@ -1,6 +1,6 @@
 # AGENTS.md — AzureLIT
 
-Planning + infra repo for an OpenAI-compatible LiteLLM gateway on Azure. No application source code, tests, or CI yet — only Terraform IaC and design docs.
+Planning + infra repo for an OpenAI-compatible LiteLLM gateway on Azure. No application source code or tests yet — only Terraform IaC, GitHub Actions CI workflows, and design docs.
 
 ## Repo Layout
 

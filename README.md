@@ -57,6 +57,13 @@ TF_VAR_resource_group_name=AzureLIT-POC
 export $(grep -v '^#' .env | grep -v '^$' | xargs)
 ```
 
+4. **(Development Only)** Install pre-commit hooks to ensure local commits pass CI formatting checks:
+
+```bash
+pip install pre-commit
+pre-commit install
+```
+
 ### Deploy
 
 ```bash
