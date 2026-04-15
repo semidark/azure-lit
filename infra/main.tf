@@ -81,15 +81,15 @@ resource "azurerm_security_center_subscription_pricing" "defender_ai" {
 # =============================================================================
 
 variable "budget_monthly_amount" {
-  description = "Monthly budget limit in EUR for Azure OpenAI/Cognitive Services spending. Set via TF_VAR_budget_monthly_amount."
+  description = "Monthly budget limit in EUR for Azure OpenAI/Cognitive Services spending. Set via TF_VAR_budget_monthly_amount. Defaults to 5 EUR intentionally low — set an appropriate limit before deploying to production."
   type        = number
-  default     = 100
+  default     = 5
 }
 
 variable "budget_alert_emails" {
-  description = "List of email addresses to receive budget alerts. Set via TF_VAR_budget_alert_emails as comma-separated list. Required."
-  type        = list(string)
-  default     = []
+  description = "Comma-separated list of email addresses to receive budget alerts. Set via TF_VAR_budget_alert_emails."
+  type        = string
+  default     = ""
 
   validation {
     condition     = length(var.budget_alert_emails) > 0
@@ -218,7 +218,7 @@ resource "azurerm_container_app" "ca" {
       name   = "litellm"
       image  = "ghcr.io/berriai/litellm:main-v1.82.3"
       cpu    = 0.5
-      memory = "1.0Gi"
+      memory = "1Gi"
 
       # Copy secrets to properly-named files in /app, then start LiteLLM.
       # Replaces the former busybox init container, eliminating that image pull

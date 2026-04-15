@@ -14,24 +14,15 @@
 #   - 100% (critical - budget exhausted)
 # =============================================================================
 
-resource "azurerm_consumption_budget_subscription" "openai_budget" {
-  name            = "azurelit-openai-monthly-budget"
-  subscription_id = "/subscriptions/${var.subscription_id}"
-  amount          = var.budget_monthly_amount
-  time_grain      = "Monthly"
+resource "azurerm_consumption_budget_resource_group" "openai_budget" {
+  name              = "azurelit-openai-monthly-budget"
+  resource_group_id = azurerm_resource_group.rg.id
+  amount            = var.budget_monthly_amount
+  time_grain        = "Monthly"
 
   time_period {
     start_date = formatdate("YYYY-MM-01'T'00:00:00Z", timestamp())
     # end_date is optional - budget recurs monthly indefinitely
-  }
-
-  # Filter to track only Cognitive Services / Azure OpenAI related costs
-  filter {
-    dimension {
-      name     = "ResourceGroupName"
-      operator = "In"
-      values   = [azurerm_resource_group.rg.name]
-    }
   }
 
   # Alert at 50% of budget
@@ -41,7 +32,7 @@ resource "azurerm_consumption_budget_subscription" "openai_budget" {
     threshold_type = "Actual"
     operator       = "GreaterThan"
 
-    contact_emails = var.budget_alert_emails
+    contact_emails = split(",", var.budget_alert_emails)
 
     contact_roles = [
       "Owner",
@@ -56,7 +47,7 @@ resource "azurerm_consumption_budget_subscription" "openai_budget" {
     threshold_type = "Actual"
     operator       = "GreaterThan"
 
-    contact_emails = var.budget_alert_emails
+    contact_emails = split(",", var.budget_alert_emails)
 
     contact_roles = [
       "Owner",
@@ -71,7 +62,7 @@ resource "azurerm_consumption_budget_subscription" "openai_budget" {
     threshold_type = "Actual"
     operator       = "GreaterThan"
 
-    contact_emails = var.budget_alert_emails
+    contact_emails = split(",", var.budget_alert_emails)
 
     contact_roles = [
       "Owner",
@@ -93,12 +84,12 @@ resource "azurerm_consumption_budget_subscription" "openai_budget" {
 
 output "budget_name" {
   description = "Name of the created Azure Consumption Budget"
-  value       = azurerm_consumption_budget_subscription.openai_budget.name
+  value       = azurerm_consumption_budget_resource_group.openai_budget.name
 }
 
 output "budget_amount" {
   description = "Monthly budget amount in EUR"
-  value       = azurerm_consumption_budget_subscription.openai_budget.amount
+  value       = azurerm_consumption_budget_resource_group.openai_budget.amount
 }
 
 output "budget_alert_emails" {
