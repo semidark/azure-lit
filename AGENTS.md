@@ -7,6 +7,7 @@ Planning + infra repo for an OpenAI-compatible LiteLLM gateway on Azure. No appl
 - `infra/` — Terraform root module (all IaC lives here; run commands from this dir)
   - `main.tf` — Providers, variables, core resources (RG, Log Analytics, Container Apps)
   - `openai.tf` — Azure AIServices Cognitive Account (unified Foundry), Foundry project, model deployments
+  - `budget.tf` — Azure Consumption Budget for cost monitoring and alerts
   - `kv.tf` — Comment-only file; Key Vault removed (no longer required)
   - `config.yaml.tpl` — LiteLLM Proxy config template; rendered by Terraform `templatefile()` and injected into container at deploy time
   - `custom_auth.py` — Custom auth handler; validates Bearer tokens against `API_KEYS` env var + master key
@@ -35,6 +36,7 @@ terraform apply tfplan
 | `subscription_id` | `TF_VAR_subscription_id` | Azure subscription to deploy into |
 | `litellm_master_key` | `TF_VAR_litellm_master_key` | Admin key; must start with `sk-` |
 | `api_keys` | `TF_VAR_api_keys` | Comma-separated client API keys validated by `custom_auth.py` |
+| `budget_alert_emails` | `TF_VAR_budget_alert_emails` | Comma-separated list of email addresses for budget alerts |
 
 ### Variables with Defaults
 
@@ -43,6 +45,7 @@ terraform apply tfplan
 | `location` | `germanywestcentral` |
 | `resource_group_name` | `AzureLIT-POC` |
 | `models` | See `openai.tf` — map of all model deployments |
+| `budget_monthly_amount` | `100` (EUR) |
 
 ### Providers
 
@@ -58,6 +61,20 @@ LiteLLM Proxy runs as a Container App with external HTTPS ingress on port 4000.
 - **Models**: Defined in `var.models` map in `openai.tf`. Doc model lists are example snapshots and may drift from Terraform source. Treat `openai.tf` plus Azure CLI model discovery as operational truth. Before adding/changing models, use `infra/list-deployable-models.sh` (or `az cognitiveservices account list-models`) to validate exact deployable `name`, `version`, and `sku` for the target account.
 - **Container image**: `ghcr.io/berriai/litellm:main-v1.82.3` (pinned)
 - **Upstream auth**: API key per Cognitive Account region, stored as Container App secrets (`azure-ai-key-<region>`), injected as `AZURE_AI_API_KEY_<REGION>` env vars.
+
+## Budget & Cost Controls
+
+Azure Consumption Budget provides cost monitoring with email alerts. Configure via:
+
+```sh
+# Required: comma-separated email addresses
+export TF_VAR_budget_alert_emails="admin@company.com,devops@company.com"
+
+# Optional: monthly limit in EUR (default: 100)
+export TF_VAR_budget_monthly_amount=500
+```
+
+Budget alerts trigger at **50%**, **80%**, and **100%** of the monthly limit. The budget filters to only track costs within the resource group created by this Terraform module.
 
 ## Secrets & Env
 
@@ -96,3 +113,4 @@ Full setup in `docs/DEPLOYMENT_SUMMARY.md`.
 - Per-key model access restrictions (extend `custom_auth.py` to map keys → allowed models)
 - Spend tracking / rate limiting without DB (e.g. Azure Table Storage counters)
 - Telemetry to Azure Monitor (latency, errors, token counts)
+- **Verify whether LiteLLM still exposes any residual `/ui` surface despite `disable_admin_ui: true`**. If needed, block it completely via an nginx sidecar that proxies traffic to LiteLLM on `localhost:4000` and returns `404` on `/ui*`. Change ingress `target_port` from `4000` to `80`. Alternative (paid): Azure Front Door WAF with a path-based custom rule.
