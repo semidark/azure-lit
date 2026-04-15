@@ -22,6 +22,31 @@ export $(grep -v '^#' infra/.env | grep -v '^$' | xargs)
 
 ---
 
+### Budget Configuration
+
+The deployment includes an Azure Consumption Budget that monitors costs and sends email alerts when spending thresholds are reached.
+
+**Required** (no default):
+```sh
+# Comma-separated list of email addresses for budget alerts
+TF_VAR_budget_alert_emails="admin@company.com,devops@company.com"
+```
+
+**Optional** (default: 100 EUR):
+```sh
+# Monthly budget limit in EUR
+TF_VAR_budget_monthly_amount=500
+```
+
+**Budget alerts trigger at:**
+- **50%** of budget — warning notification
+- **80%** of budget — elevated notification
+- **100%** of budget — critical notification (budget exhausted)
+
+The budget only tracks costs within the Terraform-managed resource group. The subscription Owner and Contributor roles also receive alerts automatically.
+
+---
+
 ### Deployment Summary
 
 This Terraform plan deploys an OpenAI-compatible LiteLLM Proxy gateway on Azure Container Apps, fronting Azure AI Foundry model deployments. The deployment creates the following resources:
@@ -31,6 +56,7 @@ This Terraform plan deploys an OpenAI-compatible LiteLLM Proxy gateway on Azure 
 3. Azure Foundry Project (`azurerm_cognitive_account_project`) — always created; required by models with `project = true`.
 4. Model deployments driven by `var.models` map in `infra/openai.tf` (repo-maintained example set; customize per subscription/region/SKU availability).
 5. Log Analytics Workspace for observability.
+6. Azure Consumption Budget with email alerts at 50%, 80%, and 100% thresholds.
 
 #### Model Routing
 

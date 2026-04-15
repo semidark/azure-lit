@@ -77,6 +77,27 @@ resource "azurerm_security_center_subscription_pricing" "defender_ai" {
 }
 
 # =============================================================================
+# BUDGET CONFIGURATION
+# =============================================================================
+
+variable "budget_monthly_amount" {
+  description = "Monthly budget limit in EUR for Azure OpenAI/Cognitive Services spending. Set via TF_VAR_budget_monthly_amount."
+  type        = number
+  default     = 100
+}
+
+variable "budget_alert_emails" {
+  description = "List of email addresses to receive budget alerts. Set via TF_VAR_budget_alert_emails as comma-separated list. Required."
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition     = length(var.budget_alert_emails) > 0
+    error_message = "At least one budget alert email must be specified. Set TF_VAR_budget_alert_emails (comma-separated for multiple emails)."
+  }
+}
+
+# =============================================================================
 # CORE INFRASTRUCTURE
 # =============================================================================
 
