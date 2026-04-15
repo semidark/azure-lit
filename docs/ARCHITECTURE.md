@@ -150,14 +150,30 @@ curl -sS \
 - Scale-to-zero (`min_replicas = 0`, `max_replicas = 1`) limits blast radius of abuse
 - `cooldown_period_in_seconds = 600` slows repeated cold-start churn after bursts
 
+## Usage Tracking
+
+Every request is logged to Log Analytics (`LiteLLMUsage_CL`) by `infra/usage_callback.py` via the Log Analytics HTTP Data Collector API. Fields logged per request:
+
+- Hashed API key (SHA-256, first 16 chars)
+- Model alias
+- Total prompt tokens, cached prompt tokens, non-cached prompt tokens, cache-write tokens
+- Completion tokens
+- Status (`success` / `failure`) and error type on failures
+- `Cost`: currently always `0` — suppressed until cached-token pricing is validated per model
+
+See `docs/USAGE_ANALYSIS.md` for schema, KQL examples, and cost tracking roadmap.
+
 ## Limitations
+
 - No dynamic model discovery; redeploy to change `model_list`
 - No per-key model restrictions (all keys access all models)
-- No spend tracking per key
 - Key rotation requires `terraform apply`
+- Cost estimates in usage logs are suppressed (`Cost = 0`) until cached-token pricing is validated
 
 ## Next Steps
+
+- Validate cached-token pricing per model and re-enable cost logging in `infra/usage_callback.py`
 - Per-key model access restrictions (extend `custom_auth.py`)
-- Spend tracking / rate limiting (Azure Table Storage counters)
-- Telemetry to Azure Monitor (latency, errors, token counts)
+- Key alias mapping (human-readable labels for keys)
+- Budget alerts / rate limiting
 - **Verify whether LiteLLM still exposes any residual `/ui` surface despite `disable_admin_ui: true`**. If needed, block it completely via an nginx sidecar that proxies traffic to LiteLLM on `localhost:4000` and returns `404` on `/ui*`. Change ingress `target_port` from `4000` to `80`. Alternative (paid): Azure Front Door WAF with a path-based custom rule.
