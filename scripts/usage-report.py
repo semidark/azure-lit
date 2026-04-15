@@ -37,6 +37,37 @@ def format_cost(value: float) -> str:
     return f"${value:.8f}"
 
 
+def resolve_workspace_id() -> str:
+    """Discover the Log Analytics workspace ID via Azure CLI."""
+    import subprocess
+
+    result = subprocess.run(
+        [
+            "az",
+            "monitor",
+            "log-analytics",
+            "workspace",
+            "show",
+            "--workspace-name",
+            "AzureLIT-POC-LA",
+            "--resource-group",
+            "AzureLIT-POC",
+            "--query",
+            "customerId",
+            "--output",
+            "tsv",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"az cli workspace lookup failed: {result.stderr.strip()}")
+    workspace_id = result.stdout.strip()
+    if not workspace_id:
+        raise RuntimeError("az cli returned empty workspace ID")
+    return workspace_id
+
+
 def run_log_analytics_query(workspace_id: str, query: str):
     """Run a KQL query against Log Analytics."""
     url = f"https://api.loganalytics.io/v1/workspaces/{workspace_id}/query"
@@ -73,12 +104,12 @@ LiteLLMUsage_CL
     if date_from and date_to:
         query = f"""
 LiteLLMUsage_CL
-| where TimeGenerated between ({date_from}T00:00:00Z .. {date_to}T23:59:59Z)
+| where TimeGenerated between (datetime({date_from}T00:00:00Z) .. datetime({date_to}T23:59:59Z))
 """
     elif date_from:
         query = f"""
 LiteLLMUsage_CL
-| where TimeGenerated between ({date_from}T00:00:00Z .. {date_from}T23:59:59Z)
+| where TimeGenerated between (datetime({date_from}T00:00:00Z) .. datetime({date_from}T23:59:59Z))
 """
 
     query += """
@@ -162,13 +193,21 @@ def main():
 
     workspace_id = args.workspace_id or os.environ.get("LOG_ANALYTICS_WORKSPACE_ID")
     if not workspace_id:
-        print(
-            "Error: Set --workspace-id or LOG_ANALYTICS_WORKSPACE_ID", file=sys.stderr
-        )
-        sys.exit(1)
+        try:
+            workspace_id = resolve_workspace_id()
+        except RuntimeError as e:
+            print(
+                f"Error: could not resolve workspace ID automatically: {e}",
+                file=sys.stderr,
+            )
+            print(
+                "Set --workspace-id or LOG_ANALYTICS_WORKSPACE_ID to override.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
 
     # Determine date range
-    date_from = args.date_from
+    date_from = args.date_from or args.date
     date_to = args.to
 
     # Build and run query
