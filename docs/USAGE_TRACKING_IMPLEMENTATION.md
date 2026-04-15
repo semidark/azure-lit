@@ -1,5 +1,9 @@
 # Usage Tracking Implementation Summary
 
+## Overview
+
+Usage tracking logs every request to Azure Log Analytics as a custom table (`LiteLLMUsage_CL`). The implementation uses a LiteLLM `CustomLogger` callback that fires on success/failure events, hashing API keys for privacy and capturing detailed token metrics including cache usage.
+
 ## What Was Implemented
 
 ### Core Infrastructure
@@ -58,39 +62,40 @@ python scripts/usage-report.py --workspace-id <workspace-id> --from 2026-04-01 -
   - Privacy considerations
   - Troubleshooting
 
-## Files Changed/Created
+## Files Changed/Created (Commit e4a16c2)
 
 | File | Action | Purpose |
 |------|--------|---------|
-| `infra/usage_callback.py` | **NEW** | LiteLLM callback handler (Log Analytics) |
-| `infra/main.tf` | **MODIFIED** | Added Log Analytics secrets/env vars |
-| `infra/config.yaml.tpl` | **MODIFIED** | Registered callbacks |
-| `infra/outputs.tf` | **MODIFIED** | Added Log Analytics outputs |
-| `scripts/usage-report.py` | **MODIFIED** | CLI for Log Analytics queries |
-| `scripts/requirements.txt` | **MODIFIED** | Updated dependencies |
-| `docs/USAGE_ANALYSIS.md` | **MODIFIED** | Updated for Log Analytics |
-| `docs/USAGE_TRACKING_IMPLEMENTATION.md` | **MODIFIED** | Updated summary |
-| `README.md` | **MODIFIED** | Added usage tracking section |
-| `docs/ARCHITECTURE.md` | **MODIFIED** | Updated limitations/next steps |
+| `infra/usage_callback.py` | **NEW** | LiteLLM `CustomLogger` callback handler for async success/failure event logging to Log Analytics |
+| `infra/main.tf` | **MODIFIED** | Added `usage-callback-py` secret, `log-analytics-key` secret, env vars (`LOG_ANALYTICS_CUSTOMER_ID`, `LOG_ANALYTICS_KEY`, `USAGE_LOG_TYPE`), container command updates to copy `usage_callback.py` |
+| `infra/config.yaml.tpl` | **MODIFIED** | Registered `callbacks: usage_callback.proxy_handler_instance`; added conditional `model_info` fields (`base_model`, `input_cost_per_token`, `output_cost_per_token`) for cost tracking support |
+| `infra/outputs.tf` | **MODIFIED** | Added `log_analytics_workspace_id` and `usage_query_example` outputs for KQL query access |
+| `infra/openai.tf` | **MODIFIED** | Extended `var.models` type with `base_model`, `input_cost_per_token`, `output_cost_per_token` optional fields |
+| `infra/main.tf` (Defender) | **MODIFIED** | Added `azurerm_security_center_subscription_pricing` for AI Services (Free tier) with detailed security documentation |
+| `docs/USAGE_TRACKING_IMPLEMENTATION.md` | **MODIFIED** | Updated implementation summary |
+| `docs/USAGE_ANALYSIS.md` | **MODIFIED** | Updated feature documentation |
 
 ## Schema
 
-Log Analytics appends type suffixes automatically (e.g. `KeyHash` → `KeyHash_s`).
+Log Analytics appends type suffixes automatically (e.g. `KeyHash` → `KeyHash_s`, `TokensIn` → `TokensIn_d`).
 
-```
-LiteLLMUsage_CL table (Log Analytics custom log):
-- TimeGenerated:         datetime  — request timestamp
-- KeyHash_s:             string    — first 16 chars of SHA-256 hash of API key
-- Model_s:               string    — model alias (e.g. gpt-4.1)
-- TokensIn_d:            real      — total prompt tokens
-- TokensOut_d:           real      — completion tokens
-- CachedTokensIn_d:      real      — prompt tokens served from cache
-- NonCachedTokensIn_d:   real      — prompt tokens not in cache (full-rate)
-- CacheWriteTokensIn_d:  real      — prompt tokens written to cache (typically 0 for Azure/OpenAI)
-- Cost_d:                real      — always 0; suppressed pending pricing validation
-- Status_s:              string    — "success" | "failure"
-- ErrorType_s:           string    — (failures only) AuthenticationError | RateLimit | Timeout | ValidationError | Unknown
-```
+**LiteLLMUsage_CL table (Log Analytics custom log):**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `TimeGenerated` | datetime | Request timestamp (UTC) |
+| `KeyHash_s` | string | First 16 chars of SHA-256 hash of API key (privacy-preserving) |
+| `Model_s` | string | Model alias (e.g., `gpt-4.1`, `gpt-5.4`) |
+| `TokensIn_d` | real | Total prompt tokens (cached + non-cached) |
+| `TokensOut_d` | real | Completion tokens generated |
+| `CachedTokensIn_d` | real | Prompt tokens served from cache (cache hit) |
+| `NonCachedTokensIn_d` | real | Prompt tokens not in cache (billed at full rate) |
+| `CacheWriteTokensIn_d` | real | Prompt tokens written to cache (typically 0 for Azure/OpenAI) |
+| `Cost_d` | real | Always `0` — suppressed until cached-token pricing is validated |
+| `Status_s` | string | `"success"` or `"failure"` |
+| `ErrorType_s` | string | (Failures only) `AuthenticationError` \| `RateLimit` \| `Timeout` \| `ValidationError` \| `Unknown` |
+
+> **Legacy columns**: Rows ingested before the current callback version may contain duplicate suffixed columns (`KeyHash_s_s`, `Model_s_s`, `Status_s_s`). These are schema artifacts from the classic custom log table and will not appear in new rows. The reporting script normalises both forms.
 
 > **Legacy columns**: rows ingested before the current callback version may contain duplicate suffixed columns (`KeyHash_s_s`, `Model_s_s`, `Status_s_s`). These are schema artifacts from the classic custom log table and will not appear in new rows. The reporting script normalises both forms.
 
@@ -107,6 +112,12 @@ LiteLLMUsage_CL table (Log Analytics custom log):
    terraform plan -out=tfplan
    terraform apply tfplan
    ```
+
+   This deploys:
+   - Log Analytics workspace (if not existing)
+   - Container App with usage tracking enabled
+   - Defender for AI Services (Free tier) — monitors AI-specific threats
+   - Outputs: `log_analytics_workspace_id`, `usage_query_example`
 
 3. **Install CLI dependencies**:
    ```bash

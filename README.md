@@ -15,7 +15,7 @@ AzureLIT provides a lightweight, cost-conscious HTTP gateway that exposes Azure 
   - `GET /v1/models` for model discovery
 - **Multi-Model Support**: Declarative `var.models` map — add a model with one Terraform map entry
 - **Authentication**: Custom auth handler validates distributed client API keys and the master key
-- **Usage Tracking**: Per-key analytics with Azure Table Storage — track tokens, cost, and failures
+- **Usage Tracking**: Per-key analytics with Azure Log Analytics — track tokens, cache usage, cost, and failures
 - **Infrastructure as Code**: Fully automated deployment via Terraform
 - **Observability**: Azure Monitor integration with metadata-only logging (no prompt/response content)
 - **Hardened Deployment**: Pinned LiteLLM image, HTTPS-only ingress, disabled UI/key routes, and constrained scale settings
@@ -180,20 +180,23 @@ print(response.choices[0].message.content)
 │   ├── kv.tf                # Comment-only; Key Vault removed in new Foundry
 │   ├── config.yaml.tpl      # LiteLLM Proxy config template (rendered by Terraform)
 │   ├── custom_auth.py       # Custom auth handler injected into the container
-│   ├── usage_callback.py    # Usage tracking callback for Azure Table Storage
+│   ├── usage_callback.py    # Usage tracking callback for Log Analytics
 │   ├── list-deployable-models.sh # Azure CLI + jq helper for deployable models
 │   ├── outputs.tf           # Deployment outputs (FQDN, URL, Storage Account)
 │   ├── rai.tf               # Permissive RAI policies for primary/regional accounts
+│   ├── usage_callback.py    # Usage tracking callback for Log Analytics
 │   ├── example.env          # Example environment variables
 │   └── .env                 # Your secrets (gitignored)
 ├── scripts/                  # Utility scripts
 │   └── usage-report.py      # CLI tool for usage analytics
 ├── docs/                     # Design and operational documentation
-│   ├── ARCHITECTURE.md      # Deployed architecture and model routing
+│   ├── ARCHITECTURE.md      # Architecture and deployment behavior
 │   ├── DEPLOYMENT_SUMMARY.md # Operational summary
 │   ├── MASTER_KEY_MANAGEMENT.md # Master/client key operations
-│   ├── CUSTOM_AUTH.md       # Custom auth behavior and limits
+│   ├── CUSTOM_AUTH.md       # Custom auth implementation
 │   ├── USAGE_ANALYSIS.md    # Per-key usage tracking and reporting
+│   ├── USAGE_TRACKING_IMPLEMENTATION.md # Implementation details
+│   ├── DEFENDER_AI_SERVICES.md # Defender for AI Services security
 │   └── LINKS.md             # External references
 └── AGENTS.md                 # Agent-specific project context
 ```
@@ -230,7 +233,7 @@ graph LR
 - **Regional AIServices Accounts**: Created automatically when `var.models` targets a non-primary region
 - **Azure Foundry Project** (`azurerm_cognitive_account_project`): Created automatically; used by models requiring project-scoped deployment (`project = true`)
 - **Log Analytics**: Metadata-only logging (no prompt/response content)
-- **Azure Table Storage**: Per-key usage tracking (tokens, cost, failures)
+- **Log Analytics**: Per-key usage tracking (tokens, cache usage, cost, failures)
 
 ### Example Model Configurations
 
@@ -254,7 +257,7 @@ The deployment uses a custom auth handler in `infra/custom_auth.py`:
 
 ## Usage Tracking
 
-Per-key usage analytics are tracked in Azure Table Storage:
+Per-key usage analytics are tracked in Azure Log Analytics:
 
 ```bash
 # Daily summary
@@ -268,6 +271,10 @@ python scripts/usage-report.py --from 2026-04-01 --to 2026-04-15 --format csv > 
 ```
 
 See [docs/USAGE_ANALYSIS.md](docs/USAGE_ANALYSIS.md) for full documentation.
+
+## Security
+
+- **Defender for AI Services**: Configured as Free tier (disabled) — see [docs/DEFENDER_AI_SERVICES.md](docs/DEFENDER_AI_SERVICES.md) for details on enabling Standard tier for production workloads
 
 ## Roadmap
 
@@ -289,6 +296,8 @@ See the `## Next Steps` sections in `docs/ARCHITECTURE.md` and `docs/DEPLOYMENT_
 - [MASTER_KEY_MANAGEMENT](docs/MASTER_KEY_MANAGEMENT.md) - Master/client key operations
 - [CUSTOM_AUTH](docs/CUSTOM_AUTH.md) - Custom auth implementation
 - [USAGE_ANALYSIS](docs/USAGE_ANALYSIS.md) - Per-key usage tracking and reporting
+- [USAGE_TRACKING_IMPLEMENTATION](docs/USAGE_TRACKING_IMPLEMENTATION.md) - Implementation details
+- [DEFENDER_AI_SERVICES](docs/DEFENDER_AI_SERVICES.md) - Defender for AI Services security documentation
 - [LINKS](docs/LINKS.md) - External references
 
 ## License
