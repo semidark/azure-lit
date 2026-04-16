@@ -17,14 +17,15 @@ AzureLIT tracks usage for every API request made through the proxy. Usage data i
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    Azure Container Apps                          │
-│  ┌──────────────┐    ┌──────────────────┐                      │
-│  │ LiteLLM      │───▶│ usage_callback.py │──▶ Log Analytics    │
-│  │ Proxy        │    │ (success/failure) │    (Custom Table)   │
-│  └──────────────┘    └──────────────────┘                      │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    subgraph ACA[Azure Container Apps]
+        proxy[LiteLLM Proxy]
+        callback[usage_callback.py<br/>success/failure]
+    end
+
+    proxy --> callback
+    callback --> la[Log Analytics<br/>Custom Table]
 ```
 
 ### Data Flow
