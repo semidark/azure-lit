@@ -9,6 +9,7 @@ Creates symlinks in ./infra to shared files from the main worktree:
   - .env
   - terraform.tfstate
   - terraform.tfstate.backup (if present in source)
+  - .terraform (if present in source; avoids re-downloading providers)
 
 Behavior:
   - Runs only inside an OpenCode sandbox worktree path
@@ -162,6 +163,7 @@ link_file() {
 link_file "$SOURCE_INFRA/.env" "$DEST_INFRA/.env" "true"
 link_file "$SOURCE_INFRA/terraform.tfstate" "$DEST_INFRA/terraform.tfstate" "true"
 link_file "$SOURCE_INFRA/terraform.tfstate.backup" "$DEST_INFRA/terraform.tfstate.backup" "false"
+link_file "$SOURCE_INFRA/.terraform" "$DEST_INFRA/.terraform" "false"
 
 echo "Sandbox symlink setup complete."
 
