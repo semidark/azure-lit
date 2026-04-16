@@ -56,7 +56,7 @@ variable "models" {
       format     = "MoonshotAI"
       version    = "1"
       sku        = "GlobalStandard"
-      capacity   = 100 # quota limit on sandbox subscription
+      capacity   = 300
       region     = "germanywestcentral"
       project    = false
       base_model = "azure_ai/kimi-k2.5"
