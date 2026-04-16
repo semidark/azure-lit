@@ -8,12 +8,15 @@ Environment:
   USAGE_LOG_TYPE            - Log type name (default: LiteLLMUsage)
 """
 
+import asyncio
+import base64
 import hashlib
+import hmac
 import json
+import os
 from datetime import datetime, timezone
 
-import os
-import requests
+import httpx
 from litellm.integrations.custom_logger import CustomLogger
 
 
@@ -32,15 +35,21 @@ def _as_int(value) -> int:
         return 0
 
 
+def _detail_value(details, key: str, default=0):
+    if isinstance(details, dict):
+        return details.get(key, default)
+    return getattr(details, key, default)
+
+
 def _extract_usage(kwargs: dict, response_obj: dict) -> dict:
     """Extract token counts from LiteLLM callback payload."""
     usage = response_obj.get("usage", {}) if response_obj else {}
     prompt_token_details = usage.get("prompt_tokens_details", {})
 
     prompt_tokens = _as_int(usage.get("prompt_tokens", 0))
-    cached_prompt_tokens = _as_int(prompt_token_details.get("cached_tokens", 0))
+    cached_prompt_tokens = _as_int(_detail_value(prompt_token_details, "cached_tokens"))
     cache_creation_input_tokens = _as_int(
-        prompt_token_details.get("cache_creation_input_tokens", 0)
+        _detail_value(prompt_token_details, "cache_creation_input_tokens")
     )
 
     return {
@@ -52,16 +61,22 @@ def _extract_usage(kwargs: dict, response_obj: dict) -> dict:
     }
 
 
-def _send_to_log_analytics(
-    workspace_id: str, shared_key: str, log_type: str, records: list
+async def _send_to_log_analytics(
+    client: httpx.AsyncClient,
+    workspace_id: str,
+    shared_key: str,
+    log_type: str,
+    records: list,
 ):
     """Send records to Log Analytics custom table via HTTP Data Collector API."""
     customer_id = workspace_id
-    timestamp = datetime.utcnow().strftime("%a, %d %b %Y %H:%M:%S GMT")  # RFC 1123
+    timestamp = datetime.now(timezone.utc).strftime(
+        "%a, %d %b %Y %H:%M:%S GMT"
+    )  # RFC 1123
 
     # Calculate content length in bytes
-    body = json.dumps(records)
-    content_length = len(body.encode("utf-8"))
+    body = json.dumps(records).encode("utf-8")
+    content_length = len(body)
 
     # Build signature string per Azure docs
     # StringToSign = VERB + "\n" + Content-Length + "\n" + Content-Type + "\n" + "x-ms-date:" + x-ms-date + "\n" + "/api/logs"
@@ -70,9 +85,6 @@ def _send_to_log_analytics(
     )
 
     # Calculate HMAC-SHA256 signature
-    import hmac
-    import base64
-
     key = base64.b64decode(shared_key)
     message = string_to_sign.encode("utf-8")
     signature = base64.b64encode(
@@ -96,11 +108,38 @@ def _send_to_log_analytics(
     if records and all("TimeGenerated" in record for record in records):
         headers["time-generated-field"] = "TimeGenerated"
 
-    response = requests.post(url, data=body, headers=headers, timeout=10)
+    response = await client.post(url, content=body, headers=headers)
     if response.status_code not in [200, 204]:
         raise Exception(
             f"Log Analytics API returned {response.status_code}: {response.text}"
         )
+
+
+async def _send_with_retry(
+    client: httpx.AsyncClient,
+    workspace_id: str,
+    shared_key: str,
+    log_type: str,
+    records: list,
+    max_retries: int = 2,
+):
+    """Attempt to send records with exponential backoff on failure."""
+    for attempt in range(max_retries + 1):
+        try:
+            await _send_to_log_analytics(
+                client, workspace_id, shared_key, log_type, records
+            )
+            return
+        except Exception as e:
+            if attempt < max_retries:
+                delay = 2**attempt
+                print(
+                    f"[usage_callback] retry {attempt + 1}/{max_retries} in {delay}s: {e}",
+                    flush=True,
+                )
+                await asyncio.sleep(delay)
+            else:
+                raise
 
 
 class UsageLogger(CustomLogger):
@@ -110,6 +149,7 @@ class UsageLogger(CustomLogger):
         self.workspace_id = os.environ.get("LOG_ANALYTICS_CUSTOMER_ID")
         self.shared_key = os.environ.get("LOG_ANALYTICS_KEY")
         self.log_type = _LOG_TYPE
+        self._client = httpx.AsyncClient(timeout=10.0)
         print("[usage_callback] UsageLogger initialized", flush=True)
 
     async def async_log_success_event(self, kwargs, response_obj, start_time, end_time):
@@ -127,6 +167,9 @@ class UsageLogger(CustomLogger):
 
             usage = _extract_usage(kwargs, response_obj)
 
+            # Extract cost calculated by LiteLLM (if available)
+            response_cost = kwargs.get("response_cost", 0) or 0
+
             now = datetime.now(timezone.utc)
             record = {
                 "TimeGenerated": now.isoformat(),
@@ -137,8 +180,7 @@ class UsageLogger(CustomLogger):
                 "CachedTokensIn": usage["CachedTokensIn"],
                 "NonCachedTokensIn": usage["NonCachedTokensIn"],
                 "CacheWriteTokensIn": usage["CacheWriteTokensIn"],
-                # Keep cost suppressed until cached-token pricing is validated.
-                "Cost": 0,
+                "Cost": round(response_cost, 10),
                 "Status": "success",
             }
             if not self.workspace_id or not self.shared_key:
@@ -148,8 +190,12 @@ class UsageLogger(CustomLogger):
                 )
                 return
 
-            _send_to_log_analytics(
-                self.workspace_id, self.shared_key, self.log_type, [record]
+            await _send_with_retry(
+                self._client,
+                self.workspace_id,
+                self.shared_key,
+                self.log_type,
+                [record],
             )
 
         except Exception as e:
@@ -206,8 +252,12 @@ class UsageLogger(CustomLogger):
                 )
                 return
 
-            _send_to_log_analytics(
-                self.workspace_id, self.shared_key, self.log_type, [record]
+            await _send_with_retry(
+                self._client,
+                self.workspace_id,
+                self.shared_key,
+                self.log_type,
+                [record],
             )
 
         except Exception as e:

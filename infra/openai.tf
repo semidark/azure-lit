@@ -21,16 +21,17 @@
 variable "models" {
   description = "Map of model deployments. Key becomes the deployment name and LiteLLM model alias."
   type = map(object({
-    format                = string
-    version               = string
-    sku                   = string
-    capacity              = number
-    region                = string
-    project               = optional(bool, false)
-    responses_only        = optional(bool, false)
-    base_model            = optional(string)
-    input_cost_per_token  = optional(number)
-    output_cost_per_token = optional(number)
+    format                      = string
+    version                     = string
+    sku                         = string
+    capacity                    = number
+    region                      = string
+    project                     = optional(bool, false)
+    responses_only              = optional(bool, false)
+    base_model                  = optional(string)
+    input_cost_per_token        = optional(number)
+    output_cost_per_token       = optional(number)
+    cache_read_input_token_cost = optional(number)
   }))
 
   default = {
