@@ -7,17 +7,22 @@ Planning + infra repo for an OpenAI-compatible LiteLLM gateway on Azure. No appl
 - `infra/` — Terraform root module (all IaC lives here; run commands from this dir)
   - `main.tf` — Providers, variables, core resources (RG, Log Analytics, Container Apps)
   - `openai.tf` — Azure AIServices Cognitive Account (unified Foundry), Foundry project, model deployments
+  - `rai.tf` — Responsible AI content filter policies
   - `budget.tf` — Azure Consumption Budget for cost monitoring and alerts
   - `kv.tf` — Comment-only file; Key Vault removed (no longer required)
   - `config.yaml.tpl` — LiteLLM Proxy config template; rendered by Terraform `templatefile()` and injected into container at deploy time
   - `custom_auth.py` — Custom auth handler; validates Bearer tokens against `API_KEYS` env var + master key
+  - `usage_callback.py` — LiteLLM CustomLogger callback for Log Analytics tracking (async via httpx, includes retries)
   - `list-deployable-models.sh` — Azure CLI + jq helper to inspect deployable model name/version/SKU/capabilities
   - `outputs.tf` — Container App FQDN and URL
 - `docs/` — Design docs
   - `ARCHITECTURE.md` — Current deployment approach and architecture
   - `LINKS.md` — Curated external references (LiteLLM, Azure, Terraform)
   - `DEPLOYMENT_SUMMARY.md`, `MASTER_KEY_MANAGEMENT.md`, `CUSTOM_AUTH.md` — Operational docs
-  - `PG_SIDECAR_FINDINGS.md` — Investigation into PostgreSQL sidecar approach (abandoned)
+  - `USAGE_ANALYSIS.md`, `USAGE_TRACKING_IMPLEMENTATION.md` — Documentation for the Log Analytics usage tracking feature
+  - `DEFENDER_AI_SERVICES.md` — Defender for AI Services security documentation
+- `scripts/` — Helper scripts
+  - `usage-report.py` — CLI tool for querying usage from Log Analytics
 
 ## Terraform Commands
 
@@ -45,7 +50,7 @@ terraform apply tfplan
 | `location` | `germanywestcentral` |
 | `resource_group_name` | `AzureLIT-POC` |
 | `models` | See `openai.tf` — map of all model deployments |
-| `budget_monthly_amount` | `100` (EUR) |
+| `budget_monthly_amount` | `5` (EUR) |
 
 ### Providers
 

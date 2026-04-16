@@ -6,7 +6,7 @@ model_list:
 %{ if model.responses_only ~}
   # Responses-only model (e.g. codex) — uses /v1/preview endpoint via azure/responses/ prefix
   - model_name: ${name}
-%{ if try(model.base_model, null) != null || try(model.input_cost_per_token, null) != null || try(model.output_cost_per_token, null) != null ~}
+%{ if try(model.base_model, null) != null || try(model.input_cost_per_token, null) != null || try(model.output_cost_per_token, null) != null || try(model.cache_read_input_token_cost, null) != null ~}
     model_info:
 %{ if try(model.base_model, null) != null ~}
       base_model: ${model.base_model}
@@ -16,6 +16,9 @@ model_list:
 %{ endif ~}
 %{ if try(model.output_cost_per_token, null) != null ~}
       output_cost_per_token: ${model.output_cost_per_token}
+%{ endif ~}
+%{ if try(model.cache_read_input_token_cost, null) != null ~}
+      cache_read_input_token_cost: ${model.cache_read_input_token_cost}
 %{ endif ~}
 %{ endif ~}
     litellm_params:
@@ -35,6 +38,9 @@ model_list:
 %{ endif ~}
 %{ if try(model.output_cost_per_token, null) != null ~}
       output_cost_per_token: ${model.output_cost_per_token}
+%{ endif ~}
+%{ if try(model.cache_read_input_token_cost, null) != null ~}
+      cache_read_input_token_cost: ${model.cache_read_input_token_cost}
 %{ endif ~}
     litellm_params:
       model: azure/${name}

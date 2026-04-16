@@ -11,7 +11,7 @@ AzureLIT tracks usage for every API request made through the proxy. Usage data i
 - **Per-Key Tracking**: Each API key is hashed (SHA-256 prefix) for privacy
 - **Token Counts**: Tracks `prompt_tokens`, `completion_tokens`, cached tokens, and non-cached tokens per request
 - **Cache Visibility**: Separates cached vs. non-cached input tokens so cache hit rates can be measured
-- **Cost Tracking**: Cost field is currently set to `0` pending accurate cached-token pricing validation (see [Cost Tracking Status](#cost-tracking-status))
+- **Cost Tracking**: `Cost_d` reflects LiteLLM's internal `response_cost` calculation based on the token counts and the model's pricing.
 - **Failure Logging**: Captures failed requests with error type classification
 - **Flexible Queries**: Query by date range, specific key, or group by model using KQL
 
@@ -51,7 +51,7 @@ Log Analytics appends type suffixes to custom field names automatically (e.g. `K
 | `CachedTokensIn_d` | real | Prompt tokens served from cache |
 | `NonCachedTokensIn_d` | real | Prompt tokens not in cache (billed at full rate) |
 | `CacheWriteTokensIn_d` | real | Prompt tokens written to cache (Anthropic-style; typically 0 for Azure/OpenAI) |
-| `Cost_d` | real | Always `0` — suppressed until cached-token pricing is validated |
+| `Cost_d` | real | LiteLLM-calculated response cost |
 | `Status_s` | string | `success` or `failure` |
 | `ErrorType_s` | string | (Only for failures) `AuthenticationError`, `RateLimit`, `Timeout`, `ValidationError`, or `Unknown` |
 
@@ -141,15 +141,13 @@ python scripts/usage-report.py --workspace-id <workspace-id> --from 2026-04-01 -
 
 ## Cost Tracking Status
 
-> **Cost is currently suppressed** — the `Cost_d` column is always `0` in new rows.
+> **Cost tracking is active** — the `Cost_d` column logs LiteLLM's calculated `response_cost`.
 
-### Why
+### How it Works
 
-LiteLLM can estimate per-request cost using its internal pricing map. However, many Azure-deployed models bill cached input tokens at a significantly lower rate than non-cached tokens. Until the cached-token split is confirmed accurate for each deployed model alias, showing the naively-computed (uncached) estimate would overstate actual costs and cause confusion.
+LiteLLM calculates per-request cost in-memory using its internal pricing map (which covers standard Azure OpenAI models) or explicit overrides in `openai.tf` (like `input_cost_per_token`, `output_cost_per_token`, and `cache_read_input_token_cost`).
 
-### What Is Logged Instead
-
-The raw token counts needed to compute correct cost later are fully available:
+If a model alias (e.g. `azure/gpt-4.1`) is not in LiteLLM's internal pricing database, or if custom pricing overrides are not provided, the cost may evaluate to `0`. However, the raw token counts needed to compute correct costs later are fully available:
 
 | Field | Use |
 |-------|-----|
@@ -158,13 +156,9 @@ The raw token counts needed to compute correct cost later are fully available:
 | `CachedTokensIn_d` | Prompt tokens billed at the (lower) cache-read rate |
 | `TokensOut_d` | Completion tokens |
 
-Once per-model cache pricing is validated, cost can be computed retroactively from these fields without needing a new deployment.
+### Checking Estimates
 
-### Next Steps for Cost
-
-1. Confirm per-model cached-token pricing (from Azure pricing pages or LiteLLM's pricing map)
-2. Add explicit `cache_read_input_token_cost` overrides per model in `openai.tf` / `config.yaml.tpl` if needed
-3. Re-enable `Cost` logging in `infra/usage_callback.py` once estimates are trusted
+If the calculated `Cost_d` appears inaccurate (e.g. for newer cached-token pricing on Azure models), you can override it directly in `infra/openai.tf` by setting `cache_read_input_token_cost` and related fields.
 
 ## Infrastructure Cost
 
@@ -244,11 +238,11 @@ LiteLLMUsage_CL
 
 ### High Latency on Writes
 
-Callback is fire-and-forget (async). If Log Analytics is slow, it will log to stdout but won't block requests.
+Callback is fire-and-forget (async) with an `httpx.AsyncClient`. It will retry automatically and log to stdout on errors, without blocking API requests.
 
-### Cost Data Missing / Always Zero
+### Cost Data Always Zero
 
-`Cost_d` is intentionally set to `0` in all current rows. See [Cost Tracking Status](#cost-tracking-status). This is by design, not an error.
+If `Cost_d` is `0`, ensure the `base_model` is mapped correctly in `infra/openai.tf`, or provide explicit pricing overrides for that model alias.
 
 ## CLI Reference
 
@@ -271,13 +265,6 @@ options:
 ```
 
 ## Next Steps
-
-### Immediate (Cost Accuracy)
-
-- [ ] Validate cached-token pricing for each deployed model alias against Azure pricing pages
-- [ ] Add `cache_read_input_token_cost` / `cache_creation_input_token_cost` overrides in `openai.tf` where needed
-- [ ] Re-enable cost logging in `infra/usage_callback.py` once estimates are trusted
-- [ ] Update `scripts/usage-report.py` to show cache hit rate and cost columns once cost is active
 
 ### v2 Enhancements (Optional)
 

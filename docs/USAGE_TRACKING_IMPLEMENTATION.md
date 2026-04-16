@@ -91,13 +91,11 @@ Log Analytics appends type suffixes automatically (e.g. `KeyHash` → `KeyHash_s
 | `CachedTokensIn_d` | real | Prompt tokens served from cache (cache hit) |
 | `NonCachedTokensIn_d` | real | Prompt tokens not in cache (billed at full rate) |
 | `CacheWriteTokensIn_d` | real | Prompt tokens written to cache (typically 0 for Azure/OpenAI) |
-| `Cost_d` | real | Always `0` — suppressed until cached-token pricing is validated |
+| `Cost_d` | real | LiteLLM-calculated response cost |
 | `Status_s` | string | `"success"` or `"failure"` |
 | `ErrorType_s` | string | (Failures only) `AuthenticationError` \| `RateLimit` \| `Timeout` \| `ValidationError` \| `Unknown` |
 
 > **Legacy columns**: Rows ingested before the current callback version may contain duplicate suffixed columns (`KeyHash_s_s`, `Model_s_s`, `Status_s_s`). These are schema artifacts from the classic custom log table and will not appear in new rows. The reporting script normalises both forms.
-
-> **Legacy columns**: rows ingested before the current callback version may contain duplicate suffixed columns (`KeyHash_s_s`, `Model_s_s`, `Status_s_s`). These are schema artifacts from the classic custom log table and will not appear in new rows. The reporting script normalises both forms.
 
 ## Deployment Steps
 
@@ -167,12 +165,6 @@ Log Analytics appends type suffixes automatically (e.g. `KeyHash` → `KeyHash_s
 - ✅ Data stored in your Azure subscription with RBAC access control
 
 ## Next Steps
-
-### Immediate (Cost Accuracy)
-
-1. Validate cached-token pricing for each model alias against Azure pricing pages
-2. Add `cache_read_input_token_cost` overrides per model in `openai.tf` / `config.yaml.tpl` if needed
-3. Re-enable cost logging in `infra/usage_callback.py` once estimates are trusted
 
 ### Ongoing
 
