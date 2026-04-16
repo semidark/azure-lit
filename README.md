@@ -233,14 +233,27 @@ The deployment uses a custom auth handler in `infra/custom_auth.py`:
 Per-key usage analytics are tracked in Azure Log Analytics:
 
 ```bash
-# Daily summary
-python scripts/usage-report.py --date 2026-04-15
+# Last 7 days (default)
+python scripts/usage-report.py
 
-# Date range
+# Specific date range
 python scripts/usage-report.py --from 2026-04-01 --to 2026-04-15
+
+# Single day
+python scripts/usage-report.py --date 2026-04-15
 
 # Export to CSV
 python scripts/usage-report.py --from 2026-04-01 --to 2026-04-15 --format csv > usage.csv
+```
+
+Output example:
+
+```
+Usage Report: last 7 days to now
+
+| Key Hash    | Requests | Failures | Tokens In | Tokens Out | Cost     | Models                |
+|-------------|----------|----------|-----------|------------|----------|----------------------|
+| 308e39b0... | 114      | 110      | 143541    | 2385       | $0.00004 | Kimi-K2.5, gpt-4.1   |
 ```
 
 See [docs/USAGE_ANALYSIS.md](docs/USAGE_ANALYSIS.md) for full documentation.
