@@ -15,6 +15,7 @@ AzureLIT provides a lightweight, cost-conscious HTTPS gateway that exposes Azure
 - **Infrastructure as Code**: Fully automated deployment via Terraform
 - **Observability**: Azure Monitor integration with metadata-only logging (no prompt/response content)
 - **Hardened Deployment**: Pinned LiteLLM image, HTTPS-only ingress, disabled UI/key routes, and constrained scale settings
+- **Prompt Caching**: Automatic cost reduction for Azure OpenAI models with 1024+ token prompts
 
 ## Quick Start
 
@@ -266,6 +267,20 @@ See [docs/USAGE_ANALYSIS.md](docs/USAGE_ANALYSIS.md) for full documentation.
 
 See the `## Next Steps` sections in `docs/ARCHITECTURE.md` and `docs/DEPLOYMENT_SUMMARY.md`.
 
+## Cost Optimization
+
+**Prompt caching** is the primary cost reduction lever for Azure OpenAI models:
+
+- Automatically reduces input token costs by up to 90% for prompts with 1024+ tokens
+- No configuration required - works automatically with proper prompt structure
+- Verified working for `gpt-4.1`, `gpt-5.4`, and `gpt-5.1-codex`
+- See [docs/PROMPT_CACHING.md](docs/PROMPT_CACHING.md) for implementation guide
+
+Typical savings for workloads with repeated context:
+- Code generation with shared codebases: 60-80% reduction
+- Document analysis with templates: 70-90% reduction  
+- Multi-turn conversations: 50-70% reduction
+
 ## Security Notes
 
 - **Secrets**: Never commit `.env` or `*.tfvars` files (both are gitignored)
@@ -278,6 +293,7 @@ See the `## Next Steps` sections in `docs/ARCHITECTURE.md` and `docs/DEPLOYMENT_
 ## Documentation
 
 - [ARCHITECTURE](docs/ARCHITECTURE.md) - Architecture and deployment behavior
+- [PROMPT_CACHING](docs/PROMPT_CACHING.md) - Cost optimization via prompt caching (recommended)
 - [DEPLOYMENT_SUMMARY](docs/DEPLOYMENT_SUMMARY.md) - Operational summary
 - [MASTER_KEY_MANAGEMENT](docs/MASTER_KEY_MANAGEMENT.md) - Master/client key operations
 - [CUSTOM_AUTH](docs/CUSTOM_AUTH.md) - Custom auth implementation

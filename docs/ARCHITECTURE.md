@@ -177,3 +177,21 @@ See `docs/USAGE_ANALYSIS.md` for schema, KQL examples, and cost tracking roadmap
 - Key alias mapping (human-readable labels for keys)
 - Budget alerts / rate limiting
 - **Verify whether LiteLLM still exposes any residual `/ui` surface despite `disable_admin_ui: true`**. If needed, block it completely via an nginx sidecar that proxies traffic to LiteLLM on `localhost:4000` and returns `404` on `/ui*`. Change ingress `target_port` from `4000` to `80`. Alternative (paid): Azure Front Door WAF with a path-based custom rule.
+
+## Prompt Caching
+
+Azure OpenAI models (`gpt-4.1`, `gpt-5.4`, `gpt-5.1-codex`) support automatic prompt caching for prompts with 1024+ tokens. The LiteLLM proxy preserves native OpenAI caching semantics:
+
+- **No configuration required**: Caching activates automatically for eligible prompts
+- **Prompt structure matters**: Place static content at the beginning, variable content at the end
+- **Use `prompt_cache_key`**: Improves hit rates for workloads with shared prefixes (parameter survives `drop_unknown_params: true`)
+- **Extended retention**: `prompt_cache_retention: "24h"` available for recurring tasks on `gpt-4.1` and newer models
+- **Visibility**: Cached token counts logged in `UsageMetrics` table (`CachedTokensIn_d` field)
+
+**Validation results** (tested against live deployment):
+- `/v1/model/info` returns `supports_prompt_caching: true` for `gpt-4.1`
+- `prompt_cache_key` parameter successfully passes through proxy filtering
+- Cache hits confirmed: second request with identical prefix shows `cached_tokens: 2816` out of 3019 total prompt tokens
+- `prompt_cache_retention: "24h` works correctly with extended retention
+
+See [docs/PROMPT_CACHING.md](PROMPT_CACHING.md) for full guidance, validation tests, best practices, and monitoring queries.

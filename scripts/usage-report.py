@@ -2,10 +2,10 @@
 """
 Usage reporting CLI for AzureLIT.
 
-Queries Log Analytics for per-key usage analytics.
+Queries Log Analytics for per-key usage analytics including prompt caching metrics.
 
 Examples:
-  # Daily summary
+  # Daily summary with cache hit rates
   python usage-report.py --date 2026-04-15
 
   # Date range
@@ -14,8 +14,16 @@ Examples:
   # Per-model breakdown for a specific key
   python usage-report.py --date 2026-04-15 --group-by model --key-hash a3f7b2d9e4f1a9c2
 
-  # Export to CSV
+  # Export to CSV with cache metrics
   python usage-report.py --from 2026-04-01 --to 2026-04-15 --format csv > usage.csv
+
+  # Debug mode - show KQL query
+  python usage-report.py --date 2026-04-15 --debug
+
+Cache Hit Rate:
+  The "Cache %" column shows the percentage of prompt tokens served from cache.
+  Higher values indicate better cost savings (cached tokens billed at ~10-20% of standard rate).
+  Target: >50% for workloads with repeated context, >70% for optimal savings.
 """
 
 import argparse
@@ -201,7 +209,8 @@ LiteLLMUsage_CL
     StatusNorm = tostring(coalesce(column_ifexists("Status_s", ""), column_ifexists("Status_s_s", ""))),
     TokensInNorm = todouble(coalesce(column_ifexists("TokensIn_d", real(null)), column_ifexists("TokensIn_i_d", real(null)), 0.0)),
     TokensOutNorm = todouble(coalesce(column_ifexists("TokensOut_d", real(null)), column_ifexists("TokensOut_i_d", real(null)), 0.0)),
-    CostNorm = todouble(coalesce(column_ifexists("Cost_d", real(null)), column_ifexists("Cost_d_d", real(null)), 0.0))
+    CostNorm = todouble(coalesce(column_ifexists("Cost_d", real(null)), column_ifexists("Cost_d_d", real(null)), 0.0)),
+    CachedTokensInNorm = todouble(coalesce(column_ifexists("CachedTokensIn_d", real(null)), column_ifexists("CachedTokensIn_d_d", real(null)), 0.0))
 """
 
     if status in ("success", "failure"):
@@ -216,8 +225,10 @@ LiteLLMUsage_CL
     Requests = count(),
     TokensIn = sum(TokensInNorm),
     TokensOut = sum(TokensOutNorm),
+    CachedTokensIn = sum(CachedTokensInNorm),
     Cost = sum(CostNorm)
     by ModelNorm
+| extend CacheHitRate = iff(TokensIn > 0, round(CachedTokensIn * 100.0 / TokensIn, 2), 0.0)
 | order by Requests desc
 """
     else:
@@ -227,9 +238,11 @@ LiteLLMUsage_CL
     Failures = countif(StatusNorm == "failure"),
     TokensIn = sum(TokensInNorm),
     TokensOut = sum(TokensOutNorm),
+    CachedTokensIn = sum(CachedTokensInNorm),
     Cost = sum(CostNorm),
     Models = make_set(ModelNorm)
     by KeyHashNorm
+| extend CacheHitRate = iff(TokensIn > 0, round(CachedTokensIn * 100.0 / TokensIn, 2), 0.0)
 | order by Requests desc
 """
 
@@ -279,6 +292,12 @@ def main():
         help="Filter by request status before aggregation",
     )
     parser.add_argument("--format", choices=["table", "csv", "json"], default="table")
+    parser.add_argument(
+        "--debug",
+        "-v",
+        action="store_true",
+        help="Show KQL query for debugging (sent to stderr)",
+    )
 
     args = parser.parse_args()
 
@@ -303,7 +322,8 @@ def main():
 
     # Build and run query
     query = build_query(date_from, date_to, args.key_hash, args.group_by, args.status)
-    print(f"Running query:\n{query}\n", file=sys.stderr)
+    if args.debug:
+        print(f"Running query:\n{query}\n", file=sys.stderr)
 
     try:
         rows = run_log_analytics_query(workspace_id, query)
@@ -319,20 +339,48 @@ def main():
     # Column order follows summarize projection in build_query().
 
     if args.group_by == "model":
-        headers = ["Model", "Requests", "Tokens In", "Tokens Out", "Cost"]
+        headers = [
+            "Model",
+            "Requests",
+            "Tokens In",
+            "Tokens Out",
+            "Cached",
+            "Cache %",
+            "Cost",
+        ]
         # Group by model
         stats = defaultdict(
-            lambda: {"requests": 0, "tokens_in": 0, "tokens_out": 0, "cost": 0.0}
+            lambda: {
+                "requests": 0,
+                "tokens_in": 0,
+                "tokens_out": 0,
+                "cached_tokens_in": 0,
+                "cost": 0.0,
+            }
         )
         for row in rows:
+            # KQL returns: ModelNorm, Requests, TokensIn, TokensOut, CachedTokensIn, CostNorm, CacheHitRate
             model = _row_value(row, 0, "ModelNorm") or "unknown"
             stats[model]["requests"] += _to_int(_row_value(row, 1, "Requests"))
             stats[model]["tokens_in"] += _to_int(_row_value(row, 2, "TokensIn"))
             stats[model]["tokens_out"] += _to_int(_row_value(row, 3, "TokensOut"))
-            stats[model]["cost"] += _to_float(_row_value(row, 4, "Cost"))
+            stats[model]["cached_tokens_in"] += _to_int(
+                _row_value(row, 4, "CachedTokensIn")
+            )
+            stats[model]["cost"] += _to_float(_row_value(row, 5, "Cost"))
 
         data = [
-            [k, v["requests"], v["tokens_in"], v["tokens_out"], format_cost(v["cost"])]
+            [
+                k,
+                v["requests"],
+                v["tokens_in"],
+                v["tokens_out"],
+                v["cached_tokens_in"],
+                f"{(v['cached_tokens_in'] * 100 / v['tokens_in']):.1f}%"
+                if v["tokens_in"] > 0
+                else "0.0%",
+                format_cost(v["cost"]),
+            ]
             for k, v in sorted(
                 stats.items(), key=lambda x: x[1]["requests"], reverse=True
             )
@@ -344,6 +392,8 @@ def main():
             "Failures",
             "Tokens In",
             "Tokens Out",
+            "Cached",
+            "Cache %",
             "Cost",
             "Models",
         ]
@@ -354,18 +404,23 @@ def main():
                 "failures": 0,
                 "tokens_in": 0,
                 "tokens_out": 0,
+                "cached_tokens_in": 0,
                 "cost": 0.0,
                 "models": set(),
             }
         )
         for row in rows:
+            # KQL returns: KeyHashNorm, Requests, Failures, TokensIn, TokensOut, CachedTokensIn, CostNorm, Models, CacheHitRate
             key = _row_value(row, 0, "KeyHashNorm") or "unknown"
             stats[key]["requests"] += _to_int(_row_value(row, 1, "Requests"))
             stats[key]["failures"] += _to_int(_row_value(row, 2, "Failures"))
             stats[key]["tokens_in"] += _to_int(_row_value(row, 3, "TokensIn"))
             stats[key]["tokens_out"] += _to_int(_row_value(row, 4, "TokensOut"))
-            stats[key]["cost"] += _to_float(_row_value(row, 5, "Cost"))
-            models_value = _row_value(row, 6, "Models")
+            stats[key]["cached_tokens_in"] += _to_int(
+                _row_value(row, 5, "CachedTokensIn")
+            )
+            stats[key]["cost"] += _to_float(_row_value(row, 6, "Cost"))
+            models_value = _row_value(row, 7, "Models")
             if models_value:
                 if isinstance(models_value, list):
                     for model in models_value:
@@ -387,11 +442,15 @@ def main():
 
         data = [
             [
-                k[:16] + "...",
+                k[:16],
                 v["requests"],
                 v["failures"],
                 v["tokens_in"],
                 v["tokens_out"],
+                v["cached_tokens_in"],
+                f"{(v['cached_tokens_in'] * 100 / v['tokens_in']):.1f}%"
+                if v["tokens_in"] > 0
+                else "0.0%",
                 format_cost(v["cost"]),
                 ", ".join(sorted(v["models"])),
             ]

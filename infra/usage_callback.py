@@ -24,8 +24,13 @@ _LOG_TYPE = os.environ.get("USAGE_LOG_TYPE", "LiteLLMUsage")
 
 
 def _hash_key(api_key: str) -> str:
-    """Return first 16 chars of SHA-256 hash for privacy."""
-    return hashlib.sha256(api_key.encode()).hexdigest()[:16]
+    """Return SHA-256 hash of api_key for privacy.
+
+    Used only as a last-resort fallback. The primary key identifier is
+    LiteLLM's internal user_api_key hash from litellm_params metadata,
+    which is a full 64-char SHA-256 hex string derived from the client Bearer token.
+    """
+    return hashlib.sha256(api_key.encode()).hexdigest()
 
 
 def _as_int(value) -> int:
@@ -158,11 +163,21 @@ class UsageLogger(CustomLogger):
         Called by LiteLLM after a successful completion.
         """
         try:
-            api_key = kwargs.get("api_key", "")
-            if not api_key:
-                return
+            # kwargs["api_key"] is the upstream provider key (e.g. Azure Cognitive Services key),
+            # not the client's Bearer token. The authorization header is stripped from
+            # proxy_server_request for security. Use LiteLLM's internal user_api_key hash,
+            # which is a stable per-client identifier derived from the original Bearer token.
+            litellm_params = kwargs.get("litellm_params", {})
+            metadata = litellm_params.get("metadata", {})
+            # user_api_key in metadata is LiteLLM's hash of the client key
+            key_hash = (
+                metadata.get("user_api_key")
+                or metadata.get("user_api_key_hash")
+                or _hash_key(kwargs.get("api_key", ""))
+            )
 
-            key_hash = _hash_key(api_key)
+            if not key_hash:
+                return
             model = kwargs.get("model", "unknown")
 
             usage = _extract_usage(kwargs, response_obj)
@@ -207,11 +222,17 @@ class UsageLogger(CustomLogger):
         Called by LiteLLM after a failure.
         """
         try:
-            api_key = kwargs.get("api_key", "")
-            if not api_key:
-                return
+            # Same extraction logic as async_log_success_event.
+            litellm_params = kwargs.get("litellm_params", {})
+            metadata = litellm_params.get("metadata", {})
+            key_hash = (
+                metadata.get("user_api_key")
+                or metadata.get("user_api_key_hash")
+                or _hash_key(kwargs.get("api_key", ""))
+            )
 
-            key_hash = _hash_key(api_key)
+            if not key_hash:
+                return
             model = kwargs.get("model", "unknown")
 
             error_type = "Unknown"
