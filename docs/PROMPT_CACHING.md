@@ -195,7 +195,7 @@ The `UsageMetrics` table tracks cache usage:
 UsageMetrics
 | where TimeGenerated > ago(7d)
 | where Model_s == "gpt-4.1"
-| summarize 
+| summarize
     TotalPromptTokens = sum(PromptTokens_d),
     CachedTokens = sum(CachedTokensIn_d),
     CacheHitRate = sum(CachedTokensIn_d) * 100.0 / sum(PromptTokens_d)

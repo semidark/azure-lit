@@ -278,7 +278,7 @@ See the `## Next Steps` sections in `docs/ARCHITECTURE.md` and `docs/DEPLOYMENT_
 
 Typical savings for workloads with repeated context:
 - Code generation with shared codebases: 60-80% reduction
-- Document analysis with templates: 70-90% reduction  
+- Document analysis with templates: 70-90% reduction
 - Multi-turn conversations: 50-70% reduction
 
 ## Security Notes

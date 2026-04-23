@@ -347,7 +347,7 @@ options:
 Cache Metrics:
   The report includes "Cached" (token count) and "Cache %" (hit rate) columns.
   Cache % = (Cached Tokens / Total Prompt Tokens) × 100
-  
+
   Target Cache Hit Rates:
   - <50%: Review prompt structure for caching opportunities
   - 50-70%: Good - some variability in prompts
