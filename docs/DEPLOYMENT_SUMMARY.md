@@ -127,6 +127,17 @@ Authorization: Bearer <api_key>
 - Admin UI and key-management routes disabled (`disable_admin_ui: true`, `disable_key_management: true`).
 - Container image pinned to `ghcr.io/berriai/litellm:main-v1.82.3`, HTTPS-only ingress, `min_replicas = 0`, `max_replicas = 1`, and `cooldown_period_in_seconds = 600`.
 
+#### Prompt Caching
+
+Azure OpenAI models (`gpt-4.1`, `gpt-5.4`, `gpt-5.1-codex`) support automatic prompt caching. Key points:
+
+- **Automatic activation**: No configuration required; works for prompts with 1024+ tokens
+- **Parameter passthrough**: `prompt_cache_key` and `prompt_cache_retention` survive `drop_unknown_params: true` filtering
+- **Cost impact**: Cached tokens billed at ~10-20% of standard input pricing
+- **Verification**: Check `usage.prompt_tokens_details.cached_tokens` in responses; monitor via Log Analytics `CachedTokensIn_d` field
+
+See [docs/PROMPT_CACHING.md](PROMPT_CACHING.md) for detailed guidance and best practices.
+
 ### Notes
 
 - Project-scoped model deployments use `azapi_resource` (type `Microsoft.CognitiveServices/accounts/projects/deployments`). `azurerm_cognitive_deployment` only accepts account-level IDs, not project IDs.

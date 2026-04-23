@@ -14,6 +14,7 @@ AzureLIT tracks usage for every API request made through the proxy. Usage data i
 - **Cost Tracking**: `Cost_d` reflects LiteLLM's internal `response_cost` calculation based on the token counts and the model's pricing.
 - **Failure Logging**: Captures failed requests with error type classification
 - **Flexible Queries**: Query by date range, specific key, or group by model using KQL
+- **Prompt Caching**: Full support for Azure OpenAI prompt caching metrics with `CachedTokensIn_d` field
 
 ## Architecture
 
@@ -59,6 +60,50 @@ Log Analytics appends type suffixes to custom field names automatically (e.g. `K
 > **Note on legacy columns**: Earlier ingested rows may show duplicate columns with doubled suffixes such as `KeyHash_s_s`, `Model_s_s`, `Status_s_s`. These are schema artifacts from an earlier callback version and will not appear in rows ingested after the current callback was deployed. They can be ignored; the reporting script normalises both forms automatically.
 
 ## Querying Usage
+
+### Prompt Caching Analysis
+
+**Cache hit rate for gpt-4.1 (last 7 days)**:
+```kusto
+LiteLLMUsage_CL
+| where TimeGenerated > ago(7d)
+| where Model_s == "gpt-4.1" and Status_s == "success" and TokensIn_d > 0
+| summarize
+    TotalRequests = count(),
+    TotalPromptTokens = sum(TokensIn_d),
+    CachedTokens = sum(CachedTokensIn_d),
+    NonCachedTokens = sum(NonCachedTokensIn_d)
+| extend CacheHitRate = CachedTokens * 100.0 / TotalPromptTokens
+| project TotalRequests, TotalPromptTokens, CachedTokens, NonCachedTokens, CacheHitRate
+```
+
+**Cache hit rate over time (daily)**:
+```kusto
+LiteLLMUsage_CL
+| where TimeGenerated > ago(14d)
+| where Model_s == "gpt-4.1" and Status_s == "success" and TokensIn_d > 0
+| summarize
+    CachedTokens = sum(CachedTokensIn_d),
+    TotalTokens = sum(TokensIn_d)
+    by bin(TimeGenerated, 1d)
+| extend CacheHitRate = CachedTokens * 100.0 / TotalTokens
+| render timechart with (xaxis=TimeGenerated, yaxis=CacheHitRate)
+```
+
+**Top cache-consuming workloads (by key)**:
+```kusto
+LiteLLMUsage_CL
+| where TimeGenerated > ago(7d)
+| where Model_s == "gpt-4.1" and Status_s == "success"
+| summarize
+    CachedTokens = sum(CachedTokensIn_d),
+    TotalTokens = sum(TokensIn_d),
+    Requests = count()
+    by KeyHash_s
+| extend CacheHitRate = CachedTokens * 100.0 / TotalTokens
+| order by CachedTokens desc
+| limit 10
+```
 
 ### KQL Examples
 
@@ -123,17 +168,36 @@ LiteLLMUsage_CL
 ### CLI Tool
 
 ```bash
-# Daily summary
+# Daily summary with cache hit rates
 python scripts/usage-report.py --workspace-id <workspace-id> --date 2026-04-15
 
 # Date range
 python scripts/usage-report.py --workspace-id <workspace-id> --from 2026-04-01 --to 2026-04-15
 
-# Per-model breakdown
+# Per-model breakdown with cache metrics
 python scripts/usage-report.py --workspace-id <workspace-id> --date 2026-04-15 --group-by model
 
-# Export to CSV
+# Check cache hit rate for specific key
+python scripts/usage-report.py --workspace-id <workspace-id> --from 2026-04-01 --to 2026-04-15 --key-hash a3f7b2d9
+
+# Export to CSV with cache metrics
 python scripts/usage-report.py --workspace-id <workspace-id> --from 2026-04-01 --to 2026-04-15 --format csv > usage.csv
+
+# Debug mode - show KQL query
+python scripts/usage-report.py --workspace-id <workspace-id> --date 2026-04-15 --debug
+```
+
+**Authentication**:
+- Uses Azure CLI credentials by default (`az login`)
+- Or set `LOG_ANALYTICS_WORKSPACE_ID` environment variable
+
+**Sample Output**:
+```
++---------------------+----------+----------+-----------+------------+--------+---------+---------+-----------------------------+
+| Key Hash            | Requests | Failures | Tokens In | Tokens Out | Cached | Cache % | Cost    | Models                      |
++---------------------+----------+----------+-----------+------------+--------+---------+---------+-----------------------------+
+| 308e39b02edc6dab... | 132      | 0        | 6717518   | 145234     | 406400 | 6.0%    | $1.4532 | Kimi-K2.5, gpt-4.1, gpt-5.4 |
++---------------------+----------+----------+-----------+------------+--------+---------+---------+-----------------------------+
 ```
 
 **Authentication**:
@@ -221,6 +285,20 @@ LiteLLMUsage_CL
 
 ## Troubleshooting
 
+### Low Cache Hit Rates
+
+If cache hit rates are lower than expected:
+
+1. **Check prompt structure**: Ensure static content appears at the beginning of prompts
+2. **Verify token threshold**: Prompts must be 1024+ tokens for caching eligibility
+3. **Review cache key usage**: Consistent `prompt_cache_key` values improve hit rates
+4. **Check request timing**: Cache TTL is 5-10 minutes (in-memory) or up to 24h (extended retention)
+
+Common issues:
+- Timestamps or UUIDs in system prompts
+- Variable user data at the start of messages
+- Different cache keys for the same workload type
+
 ### No Data Showing
 
 1. Check callback logs in Container App:
@@ -250,9 +328,10 @@ If `Cost_d` is `0`, ensure the `base_model` is mapped correctly in `infra/openai
 ```bash
 usage: usage-report.py [-h] [--workspace-id WORKSPACE_ID] [--date DATE]
                        [--from DATE_FROM] [--to TO] [--key-hash KEY_HASH]
-                       [--group-by {key,model}] [--format {table,csv,json}]
+                       [--group-by {key,model}] [--status {all,success,failure}]
+                       [--format {table,csv,json}] [--debug]
 
-AzureLIT Usage Report
+AzureLIT Usage Report with Prompt Caching Metrics
 
 options:
   -h, --help            show this help message and exit
@@ -262,7 +341,18 @@ options:
   --to                  End date (YYYY-MM-DD)
   --key-hash            Filter to specific key
   --group-by            Aggregation level (key or model)
+  --status              Filter by request status (all, success, failure)
   --format              Output format (table, csv, json)
+  --debug, -v           Show KQL query for debugging
+
+Cache Metrics:
+  The report includes "Cached" (token count) and "Cache %" (hit rate) columns.
+  Cache % = (Cached Tokens / Total Prompt Tokens) × 100
+
+  Target Cache Hit Rates:
+  - <50%: Review prompt structure for caching opportunities
+  - 50-70%: Good - some variability in prompts
+  - >70%: Excellent - strong repetition patterns
 ```
 
 ## Next Steps
