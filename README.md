@@ -286,7 +286,7 @@ Typical savings for workloads with repeated context:
 - **Secrets**: Never commit `.env` or `*.tfvars` files (both are gitignored)
 - **Logging**: No prompt/response content is logged; only metadata (timestamps, latency, token counts)
 - **HTTPS Only**: Container Apps enforces TLS on external ingress
-- **Proxy Hardening**: `disable_admin_ui: true`, `disable_key_management: true`, `drop_params: true`, `drop_unknown_params: true`
+- **Proxy Hardening**: `DISABLE_ADMIN_UI=True`, `drop_params: true`
 - **Runtime Hardening**: LiteLLM image pinned to `ghcr.io/berriai/litellm:main-v1.82.3`, `min_replicas = 0`, `max_replicas = 1`, `cooldown_period_in_seconds = 600`
 - **Least Privilege**: Managed identities used where possible
 
