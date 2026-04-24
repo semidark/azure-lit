@@ -143,9 +143,7 @@ curl -sS \
 - Store all secrets as Container Apps secrets; never commit to git
 - HTTPS only enforced (`allow_insecure_connections = false`)
 - `litellm_settings.drop_params: true` prevents clients overriding provider credentials
-- `litellm_settings.drop_unknown_params: true` drops unsupported request fields before they reach upstream APIs
-- Admin UI disabled (`disable_admin_ui: true`)
-- Key management routes disabled (`disable_key_management: true`)
+- Admin UI disabled via `DISABLE_ADMIN_UI` env var
 - Container image pinned to `main-v1.82.3` — no floating tag surprises
 - Scale-to-zero (`min_replicas = 0`, `max_replicas = 1`) limits blast radius of abuse
 - `cooldown_period_in_seconds = 600` slows repeated cold-start churn after bursts
@@ -176,7 +174,7 @@ See `docs/USAGE_ANALYSIS.md` for schema, KQL examples, and cost tracking roadmap
 - Per-key model access restrictions (extend `custom_auth.py`)
 - Key alias mapping (human-readable labels for keys)
 - Budget alerts / rate limiting
-- **Verify whether LiteLLM still exposes any residual `/ui` surface despite `disable_admin_ui: true`**. If needed, block it completely via an nginx sidecar that proxies traffic to LiteLLM on `localhost:4000` and returns `404` on `/ui*`. Change ingress `target_port` from `4000` to `80`. Alternative (paid): Azure Front Door WAF with a path-based custom rule.
+- **Verify whether LiteLLM still exposes any residual `/ui` surface despite `DISABLE_ADMIN_UI=True`**. If needed, block it completely via an nginx sidecar that proxies traffic to LiteLLM on `localhost:4000` and returns `404` on `/ui*`. Change ingress `target_port` from `4000` to `80`. Alternative (paid): Azure Front Door WAF with a path-based custom rule.
 
 ## Prompt Caching
 
@@ -184,7 +182,7 @@ Azure OpenAI models (`gpt-4.1`, `gpt-5.4`, `gpt-5.1-codex`) support automatic pr
 
 - **No configuration required**: Caching activates automatically for eligible prompts
 - **Prompt structure matters**: Place static content at the beginning, variable content at the end
-- **Use `prompt_cache_key`**: Improves hit rates for workloads with shared prefixes (parameter survives `drop_unknown_params: true`)
+- **Use `prompt_cache_key`**: Improves hit rates for workloads with shared prefixes (parameter survives `drop_params: true`)
 - **Extended retention**: `prompt_cache_retention: "24h"` available for recurring tasks on `gpt-4.1` and newer models
 - **Visibility**: Cached token counts logged in `UsageMetrics` table (`CachedTokensIn_d` field)
 

@@ -106,7 +106,6 @@ Full setup in `docs/DEPLOYMENT_SUMMARY.md`.
 
 - `config.yaml.tpl` or `custom_auth.py` changes only take effect on redeploy — no hot reload.
 - `litellm_settings.drop_params: true` — prevents clients from overriding provider credentials at request time.
-- `litellm_settings.drop_unknown_params: true` — strips unsupported request fields before they reach upstream providers.
 - `custom_auth.py` caches valid keys in memory on first request. Key changes require redeploy to take effect.
 - `custom_auth` replaces LiteLLM's built-in master key check entirely — the handler explicitly also accepts `LITELLM_MASTER_KEY` so admin operations keep working.
 - No content logging (prompts/responses); metadata-only with 30-day retention in Log Analytics.
@@ -118,4 +117,4 @@ Full setup in `docs/DEPLOYMENT_SUMMARY.md`.
 - Per-key model access restrictions (extend `custom_auth.py` to map keys → allowed models)
 - Spend tracking / rate limiting without DB (e.g. Azure Table Storage counters)
 - Telemetry to Azure Monitor (latency, errors, token counts)
-- **Verify whether LiteLLM still exposes any residual `/ui` surface despite `disable_admin_ui: true`**. If needed, block it completely via an nginx sidecar that proxies traffic to LiteLLM on `localhost:4000` and returns `404` on `/ui*`. Change ingress `target_port` from `4000` to `80`. Alternative (paid): Azure Front Door WAF with a path-based custom rule.
+- **Verify whether LiteLLM still exposes any residual `/ui` surface despite `DISABLE_ADMIN_UI=True`**. If needed, block it completely via an nginx sidecar that proxies traffic to LiteLLM on `localhost:4000` and returns `404` on `/ui*`. Change ingress `target_port` from `4000` to `80`. Alternative (paid): Azure Front Door WAF with a path-based custom rule.
