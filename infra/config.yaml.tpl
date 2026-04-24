@@ -53,8 +53,6 @@ model_list:
 # Prevent clients from overriding sensitive provider fields at request-time
 litellm_settings:
   drop_params: true
-  drop_unknown_params: true
-  set_verbose: false
   json_logs: true
 
   # Usage tracking callback - CustomLogger instance for async success/failure events
@@ -63,8 +61,6 @@ litellm_settings:
 # General proxy settings
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY
-  disable_admin_ui: true
-  disable_key_management: true
 
   # Custom auth handler — validates Bearer tokens against API_KEYS env var.
   # Runs before LiteLLM's built-in master_key check and replaces it entirely.

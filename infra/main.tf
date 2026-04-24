@@ -248,6 +248,11 @@ resource "azurerm_container_app" "ca" {
         value = "ERROR"
       }
 
+      env {
+        name  = "DISABLE_ADMIN_UI"
+        value = "True"
+      }
+
       # Shared API version for all Azure AI endpoints
       env {
         name  = "AZURE_AI_API_VERSION"

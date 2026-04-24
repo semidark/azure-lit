@@ -54,13 +54,15 @@ variable "models" {
       base_model = "azure_ai/gpt-oss-120b"
     }
     "Kimi-K2.5" = {
-      format     = "MoonshotAI"
-      version    = "1"
-      sku        = "GlobalStandard"
-      capacity   = 300
-      region     = "germanywestcentral"
-      project    = false
-      base_model = "azure_ai/kimi-k2.5"
+      format                = "MoonshotAI"
+      version               = "1"
+      sku                   = "GlobalStandard"
+      capacity              = 300
+      region                = "germanywestcentral"
+      project               = false
+      base_model            = "azure_ai/kimi-k2.5"
+      input_cost_per_token  = 0.0000006
+      output_cost_per_token = 0.000003
     }
     "grok-4-20-reasoning" = {
       format     = "xAI"
