@@ -67,6 +67,7 @@ Most models share the primary AIServices account endpoint and API key (`azure-ai
 | `gpt-4.1` | `OpenAI` | DataZoneStandard | germanywestcentral | Chat Completions |
 | `gpt-oss-120b` | `OpenAI-OSS` | GlobalStandard | germanywestcentral | Chat Completions |
 | `Kimi-K2.5` | `MoonshotAI` | GlobalStandard | germanywestcentral | Chat Completions |
+| `Kimi-K2.6` | `MoonshotAI` | GlobalStandard | germanywestcentral | Chat Completions |
 | `grok-4-20-reasoning` | `xAI` | GlobalStandard | germanywestcentral | Chat Completions |
 | `gpt-5.4` | `OpenAI` | GlobalStandard | germanywestcentral | Chat Completions |
 | `gpt-5.3-codex` | `OpenAI` | GlobalStandard | swedencentral | Responses API only |

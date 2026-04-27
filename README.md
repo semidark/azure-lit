@@ -254,7 +254,7 @@ Usage Report: last 7 days to now
 
 | Key Hash    | Requests | Failures | Tokens In | Tokens Out | Cost     | Models                |
 |-------------|----------|----------|-----------|------------|----------|----------------------|
-| 308e39b0... | 114      | 110      | 143541    | 2385       | $0.00004 | Kimi-K2.5, gpt-4.1   |
+| 308e39b0... | 114      | 110      | 143541    | 2385       | $0.00004 | Kimi-K2.5, Kimi-K2.6, gpt-4.1 |
 ```
 
 See [docs/USAGE_ANALYSIS.md](docs/USAGE_ANALYSIS.md) for full documentation.

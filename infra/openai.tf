@@ -64,6 +64,15 @@ variable "models" {
       input_cost_per_token  = 0.0000006
       output_cost_per_token = 0.000003
     }
+    "Kimi-K2.6" = {
+      format     = "MoonshotAI"
+      version    = "2026-04-20"
+      sku        = "GlobalStandard"
+      capacity   = 100
+      region     = "germanywestcentral"
+      project    = false
+      base_model = "azure_ai/kimi-k2.6"
+    }
     "grok-4-20-reasoning" = {
       format     = "xAI"
       version    = "1"
