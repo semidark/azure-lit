@@ -68,7 +68,7 @@ variable "models" {
       format     = "MoonshotAI"
       version    = "2026-04-20"
       sku        = "GlobalStandard"
-      capacity   = 100
+      capacity   = 300
       region     = "germanywestcentral"
       project    = false
       base_model = "azure_ai/kimi-k2.6"
@@ -83,13 +83,14 @@ variable "models" {
       base_model = "azure_ai/grok-4"
     }
     "gpt-5.4" = {
-      format     = "OpenAI"
-      version    = "2026-03-05"
-      sku        = "GlobalStandard"
-      capacity   = 1000
-      region     = "germanywestcentral"
-      project    = false
-      base_model = "azure/gpt-5.4"
+      format         = "OpenAI"
+      version        = "2026-03-05"
+      sku            = "GlobalStandard"
+      capacity       = 1000
+      region         = "germanywestcentral"
+      project        = false
+      responses_only = true
+      base_model     = "azure/gpt-5.4"
     }
     "gpt-5.3-codex" = {
       format         = "OpenAI"

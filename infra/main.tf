@@ -216,15 +216,16 @@ resource "azurerm_container_app" "ca" {
 
     container {
       name   = "litellm"
-      image  = "ghcr.io/berriai/litellm:main-v1.82.3"
+      image  = "ghcr.io/berriai/litellm:main-v1.83.14-stable.patch.3"
       cpu    = 0.5
       memory = "1Gi"
 
-      # Copy secrets to properly-named files in /app, then start LiteLLM.
+      # Copy secrets to properly-named files in /config, then start LiteLLM.
       # Replaces the former busybox init container, eliminating that image pull
       # from the cold-start path.
+      # Mount is at /config (not /app) so the image's /app/.venv remains visible.
       command = ["/bin/sh", "-c"]
-      args    = ["cp /mnt/secrets/config-yaml /app/config.yaml && cp /mnt/secrets/custom-auth-py /app/custom_auth.py && cp /mnt/secrets/usage-callback-py /app/usage_callback.py && exec litellm --config /app/config.yaml --port 4000 --host 0.0.0.0"]
+      args    = ["cp /mnt/secrets/config-yaml /config/config.yaml && cp /mnt/secrets/custom-auth-py /config/custom_auth.py && cp /mnt/secrets/usage-callback-py /config/usage_callback.py && cd /config && exec /app/.venv/bin/litellm --config /config/config.yaml --port 4000 --host 0.0.0.0"]
 
       env {
         name        = "LITELLM_MASTER_KEY"
@@ -354,7 +355,7 @@ resource "azurerm_container_app" "ca" {
 
       volume_mounts {
         name = "config-volume"
-        path = "/app"
+        path = "/config"
       }
     }
   }
