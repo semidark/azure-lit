@@ -271,7 +271,6 @@ If `prompt_cache_key` or `prompt_cache_retention` are not working:
 
 1. Verify model supports caching via `/v1/model/info`
 2. Check LiteLLM version compatibility
-3. Review `drop_unknown_params` setting (currently enabled for security)
 
 The current deployment has validated that these parameters survive filtering for `gpt-4.1`.
 
