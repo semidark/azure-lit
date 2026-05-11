@@ -11,7 +11,7 @@ Goal: Validate an OpenAI-compatible LiteLLM gateway on Azure AI Foundry with min
 - Region default: Germany West Central
 
 ## Architecture
-- Azure Container App runs the official LiteLLM Proxy image (`ghcr.io/berriai/litellm:main-v1.82.3`, pinned)
+- Azure Container App runs the official LiteLLM Proxy image (`ghcr.io/berriai/litellm:main-v1.83.14.rc.1`, pinned)
 - Single Azure AIServices Cognitive Account (`kind = "AIServices"`) hosts all model deployments
 - All models deployed directly on the account (`project = false` by default); Foundry project exists for models that require it (`project = true`)
 - `config.yaml` and `custom_auth.py` are rendered/read by Terraform and injected as Container Apps secrets
@@ -135,7 +135,7 @@ curl -sS \
   - Account-scoped: `azurerm_cognitive_deployment.primary_account` / `remote_account`
   - Project-scoped: `azapi_resource.primary_project` / `remote_project` (azapi required)
 - Container App:
-  - Image: LiteLLM Proxy (`ghcr.io/berriai/litellm:main-v1.82.3`)
+  - Image: LiteLLM Proxy (`ghcr.io/berriai/litellm:main-v1.83.14.rc.1`)
   - Target port: 4000
   - Env: `AZURE_AI_API_VERSION`, `LITELLM_MASTER_KEY`, `API_KEYS` (secrets), `AZURE_AI_API_BASE_<REGION>` and `AZURE_AI_API_KEY_<REGION>` per region
   - `config.yaml` + `custom_auth.py` injected via secret volume mount + entrypoint copy into `/app/`
@@ -147,7 +147,7 @@ curl -sS \
 - `litellm_settings.drop_unknown_params: true` drops unsupported request fields before they reach upstream APIs
 - Admin UI disabled (`disable_admin_ui: true`)
 - Key management routes disabled (`disable_key_management: true`)
-- Container image pinned to `main-v1.82.3` — no floating tag surprises
+- Container image pinned to `main-v1.83.14.rc.1` — no floating tag surprises
 - Scale-to-zero (`min_replicas = 0`, `max_replicas = 1`) limits blast radius of abuse
 - `cooldown_period_in_seconds = 600` slows repeated cold-start churn after bursts
 

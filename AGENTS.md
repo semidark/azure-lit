@@ -64,7 +64,7 @@ LiteLLM Proxy runs as a Container App with external HTTPS ingress on port 4000.
 - **Config injection**: A secret volume mounts all Container App secrets as files at `/mnt/secrets`. The container entrypoint copies `config-yaml` → `/app/config.yaml` and `custom-auth-py` → `/app/custom_auth.py` into an EmptyDir volume before starting LiteLLM. Changes require redeploy (`terraform apply`).
 - **Auth**: `custom_auth.py` validates Bearer tokens against client API keys (`API_KEYS` env var) and the master key (`LITELLM_MASTER_KEY`). No DB, no virtual keys, no Admin UI. `/ui` and `/key/*` routes are disabled.
 - **Models**: Defined in `var.models` map in `openai.tf`. Doc model lists are example snapshots and may drift from Terraform source. Treat `openai.tf` plus Azure CLI model discovery as operational truth. Before adding/changing models, use `infra/list-deployable-models.sh` (or `az cognitiveservices account list-models`) to validate exact deployable `name`, `version`, and `sku` for the target account.
-- **Container image**: `ghcr.io/berriai/litellm:main-v1.82.3` (pinned)
+- **Container image**: `ghcr.io/berriai/litellm:main-v1.83.14.rc.1` (pinned)
 - **Upstream auth**: API key per Cognitive Account region, stored as Container App secrets (`azure-ai-key-<region>`), injected as `AZURE_AI_API_KEY_<REGION>` env vars.
 
 ## Budget & Cost Controls

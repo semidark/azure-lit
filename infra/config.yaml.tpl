@@ -65,7 +65,7 @@ general_settings:
   # Custom auth handler — validates Bearer tokens against API_KEYS env var.
   # Runs before LiteLLM's built-in master_key check and replaces it entirely.
   # The handler also accepts LITELLM_MASTER_KEY so admin operations still work.
-  # File is copied to /app/custom_auth.py by the container entrypoint at startup.
+  # File is copied to /config/custom_auth.py by the container entrypoint at startup.
   custom_auth: custom_auth.user_api_key_auth
 
   store_model_in_db: false
