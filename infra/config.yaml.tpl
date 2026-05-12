@@ -50,6 +50,18 @@ model_list:
 %{ endif ~}
 %{ endfor ~}
 
+# ---------------------------------------------------------------------------
+# SEARCH TOOLS
+# ---------------------------------------------------------------------------
+# SearXNG instance runs as a sidecar container on localhost:8080.
+# Auth is handled by LiteLLM's custom_auth.py; SearXNG itself has no auth.
+# ---------------------------------------------------------------------------
+search_tools:
+  - search_tool_name: searxng-search
+    litellm_params:
+      search_provider: searxng
+      api_base: http://localhost:8080
+
 # Prevent clients from overriding sensitive provider fields at request-time
 litellm_settings:
   drop_params: true

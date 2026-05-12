@@ -17,3 +17,8 @@ output "usage_query_example" {
   description = "Example KQL query for usage data"
   value       = "LiteLLMUsage_CL | where TimeGenerated > ago(7d) | summarize sum(TokensIn_d), sum(TokensOut_d) by KeyHash_s"
 }
+
+output "search_api_url" {
+  description = "LiteLLM search endpoint URL"
+  value       = "https://${azurerm_container_app.ca.ingress[0].fqdn}/v1/search/searxng-search"
+}

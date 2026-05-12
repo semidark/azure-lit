@@ -101,6 +101,64 @@ See `docs/CUSTOM_AUTH.md` for key management workflow.
 ## Streaming Behavior
 - Clients set `stream=true`; LiteLLM emits OpenAI-style `chat.completion.chunk` events until completion
 
+## Search / SearXNG
+
+SearXNG runs as a second container (`searxng`) inside the same Azure Container App as LiteLLM. It is not exposed to the internet — only LiteLLM inside the pod can reach it on `localhost:8080`.
+
+### Request Flow
+
+```
+Client → POST /v1/search/searxng-search
+  Authorization: Bearer <api_key>
+  ↓
+Azure Container Apps Ingress (port 4000, HTTPS)
+  ↓
+LiteLLM Container (port 4000)
+  custom_auth.py validates Bearer token
+  LiteLLM routes /v1/search/* to built-in search handler
+  GET http://localhost:8080/search?q=<query>&format=json
+  ↓
+SearXNG Container (port 8080, internal only)
+  Queries curated engine list (Brave, Mojeek, etc.)
+  Aggregates JSON results
+  ↓
+LiteLLM reformats to Perplexity-compatible response
+  ↓
+Client
+```
+
+### Why No Google/Bing/Startpage/Yandex?
+
+These engines aggressively CAPTCHA-block requests from Azure datacenter IP ranges. Since SearXNG is hosted in Azure, they are explicitly disabled in `searxng-settings.yml.tpl`. The curated engine list favors independent indexes (Brave, Mojeek, Mwmbl, Wiby, Yep) and API-based sources (Wikipedia, arXiv, GitHub, Stack Overflow, PyPI, Docker Hub) that tolerate cloud IPs.
+
+### Configuration
+
+- `infra/config.yaml.tpl` contains a `search_tools:` stanza at the root level:
+  ```yaml
+  search_tools:
+    - search_tool_name: searxng-search
+      litellm_params:
+        search_provider: searxng
+        api_base: http://localhost:8080
+  ```
+- `infra/searxng-settings.yml.tpl` is rendered by Terraform and injected as the `searxng-settings` secret. The container entrypoint copies it to `/etc/searxng/settings.yml` before starting SearXNG.
+- `server.limiter: false` is intentional — bot detection would misclassify automated API requests from LiteLLM as bot traffic.
+- `secret_key` is a static dummy string. SearXNG requires it at startup, but we do not use HTML rendering, cookies, or sessions.
+
+### Resource Allocation
+
+| Container | CPU | Memory |
+|---|---|---|
+| `litellm` | 0.50 | 1.00 Gi |
+| `searxng` | 0.25 | 0.25 Gi |
+| **Total** | **0.75** | **1.25 Gi** |
+
+ACA Consumption plan limits: 2 vCPU / 4 Gi per app.
+
+### Health & Monitoring (MVP)
+
+No explicit health probe on SearXNG in the initial deployment. Azure Container Apps auto-restarts the pod if the container exits. If stability becomes an issue, probes will be added later.
+
 ## Client Example
 
 Python (OpenAI SDK-compatible):

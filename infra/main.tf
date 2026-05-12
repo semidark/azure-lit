@@ -134,6 +134,9 @@ locals {
   custom_auth_py    = file("${path.module}/custom_auth.py")
   usage_callback_py = file("${path.module}/usage_callback.py")
 
+  # SearXNG settings rendered from template
+  searxng_settings = templatefile("${path.module}/searxng-settings.yml.tpl", {})
+
   # Flattened list of {env_key, secret_name, endpoint} per distinct region
   # Used to build dynamic Container App secrets + env vars
   distinct_regions = toset([for k, m in var.models : m.region])
@@ -177,6 +180,12 @@ resource "azurerm_container_app" "ca" {
   secret {
     name  = "usage-callback-py"
     value = local.usage_callback_py
+  }
+
+  # SearXNG settings — copied to /etc/searxng/settings.yml by container entrypoint
+  secret {
+    name  = "searxng-settings"
+    value = local.searxng_settings
   }
 
   # Log Analytics shared key
@@ -277,6 +286,12 @@ resource "azurerm_container_app" "ca" {
         value = sha256(local.usage_callback_py)
       }
 
+      # Force a new revision when SearXNG settings change.
+      env {
+        name  = "SEARXNG_SETTINGS_SHA"
+        value = sha256(local.searxng_settings)
+      }
+
       # Log Analytics credentials for usage tracking
       env {
         name  = "LOG_ANALYTICS_CUSTOMER_ID"
@@ -356,6 +371,31 @@ resource "azurerm_container_app" "ca" {
       volume_mounts {
         name = "config-volume"
         path = "/config"
+      }
+    }
+
+    # -------------------------------------------------------------------------
+    # SearXNG sidecar — JSON-only metasearch backend for LiteLLM /search
+    # -------------------------------------------------------------------------
+    # SearXNG receives traffic only from LiteLLM on localhost:8080.
+    # It is not exposed to the internet (ingress is on port 4000).
+    # No health probe in MVP — ACA auto-restarts the pod on failure.
+    # -------------------------------------------------------------------------
+    container {
+      name   = "searxng"
+      image  = "docker.io/searxng/searxng@sha256:e29964c6e23ce4bb09a173c5d7618534a40497d585ae9d90ed1bd93bab9474a9"
+      cpu    = 0.25
+      memory = "0.5Gi"
+
+      # The official image ENTRYPOINT is /usr/local/searxng/entrypoint.sh
+      # but there is no CMD. Overriding 'command' bypasses the entrypoint,
+      # so we must chain back to it after copying our custom settings.yml.
+      command = ["/bin/sh", "-c"]
+      args    = ["cp /mnt/secrets/searxng-settings /etc/searxng/settings.yml && exec /usr/local/searxng/entrypoint.sh"]
+
+      volume_mounts {
+        name = "secrets-volume"
+        path = "/mnt/secrets"
       }
     }
   }

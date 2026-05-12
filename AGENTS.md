@@ -13,8 +13,9 @@ Planning + infra repo for an OpenAI-compatible LiteLLM gateway on Azure. No appl
   - `config.yaml.tpl` — LiteLLM Proxy config template; rendered by Terraform `templatefile()` and injected into container at deploy time
   - `custom_auth.py` — Custom auth handler; validates Bearer tokens against `API_KEYS` env var + master key
   - `usage_callback.py` — LiteLLM CustomLogger callback for Log Analytics tracking (async via httpx, includes retries)
+  - `searxng-settings.yml.tpl` — SearXNG configuration template (curated engine list for cloud IP compatibility)
   - `list-deployable-models.sh` — Azure CLI + jq helper to inspect deployable model name/version/SKU/capabilities
-  - `outputs.tf` — Container App FQDN and URL
+  - `outputs.tf` — Container App FQDN, URL, and search endpoint URL
 - `docs/` — Design docs
   - `ARCHITECTURE.md` — Current deployment approach and architecture
   - `LINKS.md` — Curated external references (LiteLLM, Azure, Terraform)
@@ -67,6 +68,16 @@ LiteLLM Proxy runs as a Container App with external HTTPS ingress on port 4000.
 - **Container image**: `ghcr.io/berriai/litellm:main-v1.83.14.rc.1` (pinned)
 - **Upstream auth**: API key per Cognitive Account region, stored as Container App secrets (`azure-ai-key-<region>`), injected as `AZURE_AI_API_KEY_<REGION>` env vars.
 
+## Search (SearXNG)
+
+A SearXNG sidecar container runs inside the same Container App and powers `POST /v1/search/searxng-search`.
+
+- **Same auth**: The existing `Authorization: Bearer <key>` header works for both chat and search.
+- **Internal only**: SearXNG listens on port 8080 inside the pod; only LiteLLM can reach it.
+- **Curated engines**: Google, Bing, Startpage, and Yandex are disabled (aggressive CAPTCHA from Azure IPs). Brave, Mojeek, DuckDuckGo, Wikipedia, arXiv, GitHub, and others are enabled.
+- **Config**: `infra/searxng-settings.yml.tpl` is rendered by Terraform and injected as a secret. `server.limiter: false` is intentional — bot detection would block intra-pod traffic from LiteLLM.
+- **Docs**: Usage examples and troubleshooting in `docs/SEARCH_SETUP.md`.
+
 ## Budget & Cost Controls
 
 Azure Consumption Budget provides cost monitoring with email alerts. Configure via:
@@ -87,6 +98,7 @@ Budget alerts trigger at **50%**, **80%**, and **100%** of the monthly limit. Th
 - Container Apps secrets:
   - `config-yaml` — rendered LiteLLM config
   - `custom-auth-py` — `custom_auth.py` source, injected alongside config
+  - `searxng-settings` — rendered SearXNG `settings.yml`
   - `litellm-master-key` — admin key
   - `api-keys` — comma-separated client API keys
   - `azure-ai-key-<region>` — one per distinct region in model map (e.g., `azure-ai-key-gwc`)
