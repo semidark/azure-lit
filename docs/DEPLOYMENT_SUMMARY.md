@@ -38,6 +38,12 @@ TF_VAR_budget_alert_emails="admin@company.com,devops@company.com"
 TF_VAR_budget_monthly_amount=500
 ```
 
+**Optional** (default: 900 seconds / 15 minutes):
+```sh
+# Container App scale-in cooldown after traffic drops
+TF_VAR_scale_cooldown_seconds=900
+```
+
 **Budget alerts trigger at:**
 - **50%** of budget — warning notification
 - **80%** of budget — elevated notification
@@ -125,7 +131,7 @@ Authorization: Bearer <api_key>
 - `litellm_settings.drop_params: true` — prevents clients from overriding provider credentials.
 - DB features disabled (`store_model_in_db: false`, `disable_spend_logs: true`, etc.) — no database in use.
   - Admin UI and key-management routes disabled (`disable_admin_ui: true`, `disable_key_management: true`).
-  - Container image pinned to `ghcr.io/berriai/litellm:main-v1.83.14-stable.patch.3`, HTTPS-only ingress, `min_replicas = 0`, `max_replicas = 1`, and `cooldown_period_in_seconds = 600`.
+  - Container image pinned to `ghcr.io/berriai/litellm:main-v1.83.14-stable.patch.3`, HTTPS-only ingress, `min_replicas = 0`, `max_replicas = 2`, and `cooldown_period_in_seconds = var.scale_cooldown_seconds` (default `900` / 15 minutes).
 
 #### Prompt Caching
 

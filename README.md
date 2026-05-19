@@ -50,6 +50,7 @@ TF_VAR_api_keys=sk-clientA,sk-clientB
 # Optional - Override defaults
 TF_VAR_location=germanywestcentral
 TF_VAR_resource_group_name=AzureLIT-POC
+TF_VAR_scale_cooldown_seconds=900
 ```
 
 3. Load the env vars (with direnv: `direnv allow`; without:)
@@ -287,7 +288,7 @@ Typical savings for workloads with repeated context:
 - **Logging**: No prompt/response content is logged; only metadata (timestamps, latency, token counts)
 - **HTTPS Only**: Container Apps enforces TLS on external ingress
   - **Proxy Hardening**: `disable_admin_ui: true`, `disable_key_management: true`, `drop_params: true`, `drop_unknown_params: true`
-  - **Runtime Hardening**: LiteLLM image pinned to `ghcr.io/berriai/litellm:main-v1.83.14-stable.patch.3`, `min_replicas = 0`, `max_replicas = 1`, `cooldown_period_in_seconds = 600`
+  - **Runtime Hardening**: LiteLLM image pinned to `ghcr.io/berriai/litellm:main-v1.83.14-stable.patch.3`, `min_replicas = 0`, `max_replicas = 2`, `cooldown_period_in_seconds = var.scale_cooldown_seconds` (default `900` / 15 minutes)
 - **Least Privilege**: Managed identities used where possible
 
 ## Documentation

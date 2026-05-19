@@ -206,8 +206,8 @@ curl -sS \
   - Admin UI disabled (`disable_admin_ui: true`)
   - Key management routes disabled (`disable_key_management: true`)
   - Container image pinned to `main-v1.83.14-stable.patch.3` — no floating tag surprises
-- Scale-to-zero (`min_replicas = 0`, `max_replicas = 1`) limits blast radius of abuse
-- `cooldown_period_in_seconds = 600` slows repeated cold-start churn after bursts
+- Scale-to-zero (`min_replicas = 0`, `max_replicas = 2`) limits blast radius of abuse
+- `cooldown_period_in_seconds = var.scale_cooldown_seconds` defaults to 900 seconds (15 minutes) to slow repeated cold-start churn after bursts
 
 ## Usage Tracking
 

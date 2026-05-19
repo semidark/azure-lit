@@ -97,6 +97,12 @@ variable "budget_alert_emails" {
   }
 }
 
+variable "scale_cooldown_seconds" {
+  description = "Container App scale-in cooldown in seconds. Set via TF_VAR_scale_cooldown_seconds. Defaults to 900 seconds (15 minutes) to reduce cold-start churn after bursts."
+  type        = number
+  default     = 900
+}
+
 # =============================================================================
 # CORE INFRASTRUCTURE
 # =============================================================================
@@ -206,7 +212,7 @@ resource "azurerm_container_app" "ca" {
   template {
     min_replicas               = 0
     max_replicas               = 2
-    cooldown_period_in_seconds = 600
+    cooldown_period_in_seconds = var.scale_cooldown_seconds
 
     # Secret volume: all Container App secrets are mounted as files.
     # Only config-yaml and custom-auth-py are used; the rest are harmless extras.
