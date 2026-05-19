@@ -32,7 +32,7 @@ The model list below is an example snapshot for documentation context and may dr
 | `Kimi-K2.5` | `MoonshotAI` | GlobalStandard | germanywestcentral |
 | `Kimi-K2.6` | `MoonshotAI` | GlobalStandard | germanywestcentral |
 | `grok-4-20-reasoning` | `xAI` | GlobalStandard | germanywestcentral |
-| `gpt-5.4` | `OpenAI` | GlobalStandard | germanywestcentral |
+| `gpt-5.4` | `OpenAI` | DataZoneStandard | germanywestcentral |
 | `gpt-5.3-codex` | `OpenAI` | GlobalStandard | swedencentral |
 
 **Adding a model:** Add one entry to `var.models` in `openai.tf` and run `terraform apply`. Terraform automatically:

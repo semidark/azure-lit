@@ -85,7 +85,7 @@ variable "models" {
     "gpt-5.4" = {
       format         = "OpenAI"
       version        = "2026-03-05"
-      sku            = "GlobalStandard"
+      sku            = "DataZoneStandard"
       capacity       = 1000
       region         = "germanywestcentral"
       project        = false

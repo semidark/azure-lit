@@ -75,7 +75,7 @@ Most models share the primary AIServices account endpoint and API key (`azure-ai
 | `Kimi-K2.5` | `MoonshotAI` | GlobalStandard | germanywestcentral | Chat Completions |
 | `Kimi-K2.6` | `MoonshotAI` | GlobalStandard | germanywestcentral | Chat Completions |
 | `grok-4-20-reasoning` | `xAI` | GlobalStandard | germanywestcentral | Chat Completions |
-| `gpt-5.4` | `OpenAI` | GlobalStandard | germanywestcentral | Chat Completions |
+| `gpt-5.4` | `OpenAI` | DataZoneStandard | germanywestcentral | Chat Completions |
 | `gpt-5.3-codex` | `OpenAI` | GlobalStandard | swedencentral | Responses API only |
 
 Clients choose by model name via a single OpenAI-compatible surface. Standard chat models use `/v1/chat/completions` (streaming supported). Responses-only models such as `gpt-5.3-codex` are wired with LiteLLM's `azure/responses/` prefix and `api_version=preview`.
